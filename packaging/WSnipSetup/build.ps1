@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$desktopProject = Join-Path $repositoryRoot 'src\WSnip.Desktop\WSnip.Desktop.csproj'
+$desktopProject = Join-Path $repositoryRoot 'src\WSnip.App\WSnip.App.csproj'
 $packageProject = Join-Path $PSScriptRoot 'WSnipPackage.wixproj'
 $bundleProject = Join-Path $PSScriptRoot 'WSnipBundle.wixproj'
 
@@ -110,11 +110,12 @@ foreach ($currentArchitecture in $Architecture) {
     $msiPath = Join-Path $msiDirectory "WSnip-$currentArchitecture.msi"
     $setupPath = Join-Path $repositoryRoot "artifacts\release\WSnipSetup-$currentArchitecture.exe"
 
+    if (-not ([IO.Path]::GetFullPath($architectureRoot).StartsWith($repositoryRoot + "\artifacts\windows-installer\", [StringComparison]::OrdinalIgnoreCase))) { throw "Unsafe installer output path." }
     Remove-Item -LiteralPath $architectureRoot -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $setupPath -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $publishDirectory -Force | Out-Null
 
-    # NativeAOT, self-contained; the desktop head bundles the LGPL FFmpeg DLLs next to WSnip.exe.
+    # Self-contained WinUI setup distribution, including Windows App SDK and FFmpeg DLLs.
     Invoke-DotNet -Arguments (@(
         'publish', $desktopProject,
         '--configuration', $Configuration,
@@ -123,6 +124,7 @@ foreach ($currentArchitecture in $Architecture) {
         '--output', $publishDirectory,
         '--artifacts-path', $dotnetArtifacts,
         "-p:Platform=$msbuildPlatform",
+        "-p:WindowsPackageType=None",
         "-p:Version=$installerVersion"
     ) + $sharedProperties)
 

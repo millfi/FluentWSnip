@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <!--
-    MSIX packaging of the NativeAOT desktop head. Builds with Visual Studio's MSBuild (the
+    MSIX packaging of the WinUI application. Builds with Visual Studio's MSBuild (the
     DesktopBridge targets do not ship with the .NET SDK); see docs/windows-packaging.md.
   -->
   <PropertyGroup Condition="'$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '15.0'">
@@ -36,7 +36,7 @@
     <DefaultLanguage>en-US</DefaultLanguage>
     <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
     <NoWarn>$(NoWarn);NU1702</NoWarn>
-    <EntryPointProjectUniqueName>..\..\src\WSnip.Desktop\WSnip.Desktop.csproj</EntryPointProjectUniqueName>
+    <EntryPointProjectUniqueName>..\..\src\WSnip.App\WSnip.App.csproj</EntryPointProjectUniqueName>
     <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
     <PackageCertificateKeyFile>WSnipMSIX_TemporaryKey.pfx</PackageCertificateKeyFile>
     <AppxPackageSigningTimestampDigestAlgorithm>SHA256</AppxPackageSigningTimestampDigestAlgorithm>
@@ -72,7 +72,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\WSnip.Desktop\WSnip.Desktop.csproj" />
+    <ProjectReference Include="..\..\src\WSnip.App\WSnip.App.csproj" AdditionalProperties="WindowsPackageType=None;GenerateAppxPackageOnBuild=false;EnableMsixTooling=false" />
   </ItemGroup>
   <ItemGroup>
     <PRIResource Include="Resources.resw" />

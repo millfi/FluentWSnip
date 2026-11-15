@@ -1,0 +1,81 @@
+<services:AppWindowBase
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:services="using:WSnip.App.Services" xmlns:editor="using:WSnip.App.Editor"
+ xmlns:rendering="using:WSnip.App.Rendering" xmlns:strings="using:WSnip.Core.Strings"
+ x:Class="WSnip.App.Editor.EditorWindow">
+ <Grid x:Name="Root" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <CommandBar x:Name="MainCommands" DefaultLabelPosition="Right" Background="{ThemeResource LayerFillColorDefaultBrush}">
+   <CommandBar.Content>
+    <StackPanel Orientation="Horizontal" Spacing="8" Margin="8,4">
+     <ComboBox x:Name="ModeBox" Width="170" AutomationProperties.Name="{x:Bind strings:AppStrings.SnippingMode, Mode=OneTime}" />
+     <ComboBox x:Name="DelayBox" Width="130" AutomationProperties.Name="{x:Bind strings:AppStrings.Delay, Mode=OneTime}" />
+    </StackPanel>
+   </CommandBar.Content>
+   <AppBarButton x:Name="NewButton" Icon="Add" Label="{x:Bind strings:AppStrings.NewSnip, Mode=OneTime}" />
+   <AppBarButton x:Name="CopyButton" Icon="Copy" Label="{x:Bind strings:AppStrings.Copy, Mode=OneTime}" />
+   <AppBarButton x:Name="SaveButton" Icon="Save" Label="{x:Bind strings:AppStrings.Save, Mode=OneTime}" />
+   <CommandBar.SecondaryCommands>
+    <AppBarButton x:Name="OpenFolderItem" Icon="Folder" Label="{x:Bind strings:AppStrings.OpenFolder, Mode=OneTime}" />
+    <AppBarButton x:Name="SettingsItem" Icon="Setting" Label="{x:Bind strings:AppStrings.Settings, Mode=OneTime}" />
+    <AppBarButton x:Name="ExitItem" Icon="Cancel" Label="{x:Bind strings:AppStrings.Exit, Mode=OneTime}" />
+   </CommandBar.SecondaryCommands>
+  </CommandBar>
+  <Grid Grid.Row="1" x:Name="CanvasHost">
+   <editor:SnipCanvas x:Name="Canvas" Visibility="Collapsed" />
+   <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" MaxWidth="520" Margin="24">
+    <FontIcon Glyph="&#xE8A7;" FontSize="56" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+    <TextBlock Text="WSnip" FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Center" />
+    <TextBlock x:Name="EmptyHint" TextAlignment="Center" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+   </StackPanel>
+   <Canvas x:Name="PixelInfoLayer" IsHitTestVisible="False">
+    <Border x:Name="PixelInfo" Visibility="Collapsed" Padding="12" CornerRadius="8" Background="{ThemeResource SolidBackgroundFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+     <StackPanel Spacing="4">
+      <StackPanel Orientation="Horizontal" Spacing="8"><rendering:ColorSwatch x:Name="PixelSwatch" Width="24" Height="24"/><TextBlock x:Name="PixelPosition" VerticalAlignment="Center"/></StackPanel>
+      <TextBlock x:Name="PixelColor"/><TextBlock x:Name="PixelLinear"/><TextBlock x:Name="PixelLuminance" Style="{StaticResource CaptionStyle}"/>
+     </StackPanel>
+    </Border>
+   </Canvas>
+   <Border x:Name="EditorDock" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="16" CornerRadius="12" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+    <Border.Background><AcrylicBrush TintOpacity="0.85" TintColor="{ThemeResource SystemChromeMediumColor}" FallbackColor="{ThemeResource SystemChromeMediumColor}"/></Border.Background>
+    <StackPanel Padding="8" Spacing="6">
+     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+      <StackPanel x:Name="ToolOptions" Orientation="Horizontal" Spacing="12" Visibility="Collapsed">
+       <StackPanel x:Name="Swatches" Orientation="Horizontal" Spacing="4" />
+       <Button x:Name="AddColorButton" Content="+" ToolTipService.ToolTip="{x:Bind strings:AppStrings.AddColor, Mode=OneTime}" AutomationProperties.Name="{x:Bind strings:AppStrings.AddColor, Mode=OneTime}" />
+       <ToggleButton x:Name="PickColorTool" ToolTipService.ToolTip="{x:Bind strings:AppStrings.PickColorTip, Mode=OneTime}" AutomationProperties.Name="{x:Bind strings:AppStrings.PickColor, Mode=OneTime}"><FontIcon Glyph="&#xEF3C;"/></ToggleButton>
+       <Slider x:Name="SizeSlider" Width="140" Minimum="1" Maximum="40" Header="{x:Bind strings:AppStrings.Size, Mode=OneTime}" AutomationProperties.Name="{x:Bind strings:AppStrings.Size, Mode=OneTime}" />
+      </StackPanel>
+     </ScrollViewer>
+     <StackPanel x:Name="CropBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed" HorizontalAlignment="Center">
+      <TextBlock x:Name="CropSize" VerticalAlignment="Center"/>
+      <Button x:Name="ApplyCropButton" Content="{x:Bind strings:AppStrings.Apply, Mode=OneTime}" Style="{StaticResource AccentButtonStyle}"/>
+      <Button x:Name="CancelCropButton" Content="{x:Bind strings:AppStrings.Cancel, Mode=OneTime}"/>
+     </StackPanel>
+     <CommandBar Background="Transparent" DefaultLabelPosition="Right" HorizontalAlignment="Stretch">
+      <AppBarToggleButton x:Name="PenTool" Icon="Edit" Label="{x:Bind strings:AppStrings.Pen, Mode=OneTime}"/>
+      <AppBarToggleButton x:Name="HighlighterTool" Icon="Highlight" Label="{x:Bind strings:AppStrings.Highlighter, Mode=OneTime}"/>
+      <AppBarToggleButton x:Name="EraserTool" Icon="Clear" Label="{x:Bind strings:AppStrings.Eraser, Mode=OneTime}"/>
+      <AppBarToggleButton x:Name="CropTool" Icon="Crop" Label="{x:Bind strings:AppStrings.Crop, Mode=OneTime}"/>
+      <AppBarSeparator/>
+      <AppBarButton x:Name="UndoButton" Icon="Undo" Label="{x:Bind strings:AppStrings.Undo, Mode=OneTime}"/>
+      <AppBarButton x:Name="RedoButton" Icon="Redo" Label="{x:Bind strings:AppStrings.Redo, Mode=OneTime}"/>
+      <AppBarButton x:Name="ZoomOutButton" Icon="ZoomOut" Label="{x:Bind strings:AppStrings.ZoomOut, Mode=OneTime}"/>
+      <AppBarButton x:Name="ZoomButton" Label="100%" Icon="Find" ToolTipService.ToolTip="{x:Bind strings:AppStrings.ZoomFitTip, Mode=OneTime}" AutomationProperties.Name="{x:Bind strings:AppStrings.ZoomFitTip, Mode=OneTime}"/>
+      <AppBarButton x:Name="ZoomInButton" Icon="ZoomIn" Label="{x:Bind strings:AppStrings.ZoomIn, Mode=OneTime}"/>
+      <CommandBar.SecondaryCommands>
+       <AppBarButton x:Name="ToneMappingButton" Icon="Repair" Label="{x:Bind strings:AppStrings.ToneMapping, Mode=OneTime}"/>
+       <AppBarToggleButton x:Name="HdrToggle" Label="HDR" IsChecked="True"/>
+      </CommandBar.SecondaryCommands>
+     </CommandBar>
+    </StackPanel>
+   </Border>
+  </Grid>
+  <Grid Grid.Row="2" Padding="12,8" ColumnSpacing="12">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <TextBlock x:Name="StatusText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12"/>
+   <Button x:Name="SavedLink" Grid.Column="1" Visibility="Collapsed" ToolTipService.ToolTip="{x:Bind strings:AppStrings.ShowInFolder, Mode=OneTime}"><TextBlock x:Name="SavedText" FontSize="12"/></Button>
+  </Grid>
+ </Grid>
+</services:AppWindowBase>

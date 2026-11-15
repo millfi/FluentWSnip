@@ -32,8 +32,9 @@ $text = "$($version.Major).$($version.Minor).$([Math]::Max(0, $version.Build)).$
 $props = [regex]::Replace($props, '<Version>[^<]+</Version>', "<Version>$text</Version>")
 [IO.File]::WriteAllText($propsPath, $props, [Text.UTF8Encoding]::new($false))
 
-[string] $manifest = [IO.File]::ReadAllText($manifestPath)
-$manifest = [regex]::Replace($manifest, '(<Identity\b[^>]*?\sVersion=")[^"]*(")', "`${1}$text`${2}")
-[IO.File]::WriteAllText($manifestPath, $manifest, [Text.UTF8Encoding]::new($false))
-
+foreach ($currentManifest in @($manifestPath, (Join-Path $repositoryRoot 'src\WSnip.App\Package.appxmanifest'))) {
+    [string] $manifest = [IO.File]::ReadAllText($currentManifest)
+    $manifest = [regex]::Replace($manifest, '(<Identity\b[^>]*?\sVersion=")[^"]*(")', "`${1}$text`${2}")
+    [IO.File]::WriteAllText($currentManifest, $manifest, [Text.UTF8Encoding]::new($false))
+}
 $text

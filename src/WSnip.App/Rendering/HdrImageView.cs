@@ -1,42 +1,18 @@
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Media;
-
+using SkiaSharp;
 namespace WSnip.App.Rendering;
 
-/// <summary>Draws a shared image stretched over the control, through the HDR-preserving draw operation.</summary>
-public sealed class HdrImageView : Control
+public sealed class HdrImageView : HdrSurface
 {
     private SharedImage? image;
-
     public SharedImage? Image
     {
         get => image;
-        set
-        {
-            if (ReferenceEquals(image, value))
-                return;
-            SharedImage? next = value?.AddRef();
-            image?.Release();
-            image = next;
-            InvalidateVisual();
-        }
+        set { if (ReferenceEquals(image, value)) return; var next = value?.AddRef(); image?.Release(); image = next; InvalidateVisual(); }
     }
-
-    /// <summary>Filters when scaled; off for pixel-exact presentation.</summary>
     public bool Smooth { get; set; } = true;
-
-    public override void Render(DrawingContext context)
+    protected override void Draw(SKCanvas canvas)
     {
-        if (image is null)
-            return;
-        var bounds = new Rect(Bounds.Size);
-        context.Custom(new SnipDrawOperation(bounds, image, bounds, [], Smooth, surfaceObserved: null));
+        if (image is not null) SnipDrawing.Draw(canvas, image, new SKRect(0, 0, (float)ActualWidth, (float)ActualHeight), [], Smooth, Surface.ReferenceWhiteScale, false);
     }
-
-    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
-    {
-        base.OnDetachedFromVisualTree(e);
-        Image = null;
-    }
+    public override void Dispose() { Image = null; base.Dispose(); }
 }

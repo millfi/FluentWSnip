@@ -1,12 +1,6 @@
 name: Release
 
-# Builds the Linux x86_64/aarch64 Flatpak bundles, the Windows x64/ARM64 MSIX bundle and the WiX
-# setup executables, then publishes them in one GitHub Release. Triggered by pushing a version tag
-# (e.g. v0.2.0) or run manually from the Actions tab.
-#
-# WSnip builds against a Light Player checkout (shared sources and package configuration)
-# Windows packages are signed with the same Light Studio certificate as Light Player. See README.md
-# ("Releases") for the secrets and repository settings this workflow needs.
+# Builds Windows x64/ARM64 MSIX and WiX setup artifacts.
 on:
   push:
     tags:
@@ -69,6 +63,10 @@ jobs:
         run: |
           $version = & "$env:GITHUB_WORKSPACE\WSnip\packaging\Set-Version.ps1" -Tag $env:RELEASE_TAG
           Write-Host "Packaging WSnip $version"
+
+      - name: Test HDR presentation
+        shell: pwsh
+        run: dotnet test WSnip/tests/WSnip.Rendering.Tests/WSnip.Rendering.Tests.csproj -p:Platform=x64
 
       - name: Restore signing certificate from secrets
         shell: pwsh
@@ -191,7 +189,7 @@ jobs:
           $version = & "$env:GITHUB_WORKSPACE\WSnip\packaging\Set-Version.ps1" -Tag $env:RELEASE_TAG
           Write-Host "Packaging WSnip $version"
 
-      # NativeAOT publishes for x64 and ARM64; WiX is restored through its MSBuild SDK.
+      # Self-contained WinUI publishes for x64 and ARM64; WiX is restored through its MSBuild SDK.
       - name: Install LLVM for native binding generation
         run: choco install llvm --yes --no-progress
 
@@ -207,70 +205,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  build-linux:
-    name: Build Linux ${{ matrix.arch }} Flatpak
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            rid: linux-x64
-            runner: ubuntu-26.04
-          - arch: aarch64
-            rid: linux-arm64
-            runner: ubuntu-26.04-arm
-    runs-on: ${{ matrix.runner }}
-    steps:
-      # The Flatpak builds against the Light Player release tag pinned in its manifest, which
-      # `make flatpak` downloads and verifies itself, so no Light Player checkout is needed.
-      - name: Checkout WSnip
-        uses: actions/checkout@v4
-        with:
-          path: WSnip
-
-      - name: Install flatpak and flatpak-builder
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder elfutils
-
-      # flatpak-builder's bubblewrap sandbox needs them, and Ubuntu restricts them through AppArmor.
-      - name: Allow unprivileged user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      # flatpak-builder's downloads (the offline NuGet feed) and build state, kept per architecture.
-      - name: Cache flatpak-builder state
-        uses: actions/cache@v4
-        with:
-          path: WSnip/artifacts/flatpak-${{ matrix.arch }}/.flatpak-builder
-          key: flatpak-builder-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('WSnip/packaging/flatpak/im.hjc.WSnip.yml', 'WSnip/src/**/*.csproj', 'WSnip/Directory.Packages.props', 'WSnip/Makefile') }}
-          restore-keys: |
-            flatpak-builder-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Stamp release version
-        shell: pwsh
-        run: |
-          $version = & "$env:GITHUB_WORKSPACE/WSnip/packaging/Set-Version.ps1" -Tag $env:RELEASE_TAG
-          Write-Host "Packaging WSnip $version"
-
-      # Installs the SDK and its .NET/LLVM extensions from Flathub, pins the NuGet packages and publishes
-      # the app inside the sandbox, against the Light Player release pinned in the manifest.
-      - name: Build Flatpak bundle
-        working-directory: WSnip
-        run: make flatpak RID=${{ matrix.rid }}
-
-      - name: Upload Linux release asset
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-linux-${{ matrix.arch }}
-          path: WSnip/artifacts/flatpak-${{ matrix.arch }}/im.hjc.WSnip-${{ matrix.arch }}.flatpak
-          if-no-files-found: error
-          retention-days: 1
-
   publish-release:
     name: Publish release
     needs:
       - build-windows
       - build-windows-setup
-      - build-linux
     runs-on: ubuntu-latest
     steps:
       - name: Download release assets
@@ -288,6 +227,5 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            release-assets/*.flatpak
             release-assets/*.zip
             release-assets/*.exe

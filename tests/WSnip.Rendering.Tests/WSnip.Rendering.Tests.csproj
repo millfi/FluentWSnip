@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\WSnip.Core\WSnip.Core.csproj" />
+    <Compile Include="..\..\src\WSnip.App\Rendering\SharedImage.cs" Link="SharedImage.cs" />
+    <Compile Include="..\..\src\WSnip.App\Rendering\SnipDrawing.cs" Link="SnipDrawing.cs" />
+  </ItemGroup>
+</Project>

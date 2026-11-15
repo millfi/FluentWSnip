@@ -8,6 +8,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Platforms>x64;ARM64</Platforms>
     <Configurations>Debug;Release</Configurations>
+    <BuildInParallel>false</BuildInParallel>
     <Version>0.1.0.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
@@ -17,7 +18,8 @@
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
     <!-- Shared Light Player sources and build scripts. -->
     <LightPlayerRoot Condition="'$(LightPlayerRoot)' == ''">$(MSBuildThisFileDirectory)..\LightPlayer\</LightPlayerRoot>
-    <UseAvaloniaFork Condition="'$(UseAvaloniaFork)' == ''">true</UseAvaloniaFork>
+    <LightPlayerRoot Condition="!Exists('$(LightPlayerRoot)Directory.Packages.props') and Exists('$(MSBuildThisFileDirectory).deps/LightPlayer/Directory.Packages.props')">$(MSBuildThisFileDirectory).deps/LightPlayer/</LightPlayerRoot>
+    <UseAvaloniaFork>false</UseAvaloniaFork>
     <NativeBindingsPolicy>$(LightPlayerRoot)build/NativeBindings.Configuration.targets</NativeBindingsPolicy>
   </PropertyGroup>
 

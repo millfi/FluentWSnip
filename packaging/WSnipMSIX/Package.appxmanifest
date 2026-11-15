@@ -39,7 +39,7 @@
         <uap:SplashScreen Image="Images\SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
-        <uap:Extension Category="windows.protocol" Executable="WSnip.Desktop\WSnip.exe" EntryPoint="Windows.FullTrustApplication">
+        <uap:Extension Category="windows.protocol" Executable="WSnip.App\WSnip.exe" EntryPoint="Windows.FullTrustApplication">
           <uap:Protocol Name="ms-screenclip">
             <uap:DisplayName>WSnip</uap:DisplayName>
           </uap:Protocol>
@@ -50,11 +50,11 @@
           The packaging tools resolve $targetnametoken$ on the Application only, so extensions name the
           entry point project's folder in the package.
         -->
-        <desktop:Extension Category="windows.startupTask" Executable="WSnip.Desktop\WSnip.exe" EntryPoint="Windows.FullTrustApplication">
+        <desktop:Extension Category="windows.startupTask" Executable="WSnip.App\WSnip.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="WSnipStartup" Enabled="false" DisplayName="WSnip" />
         </desktop:Extension>
         <!-- Keeps WSnip.exe, with or without its snip switch, working from Run, scripts and shortcuts. -->
-        <uap5:Extension Category="windows.appExecutionAlias" Executable="WSnip.Desktop\WSnip.exe" EntryPoint="Windows.FullTrustApplication">
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="WSnip.App\WSnip.exe" EntryPoint="Windows.FullTrustApplication">
           <uap5:AppExecutionAlias>
             <uap5:ExecutionAlias Alias="WSnip.exe" />
           </uap5:AppExecutionAlias>

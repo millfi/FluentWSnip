@@ -1,6 +1,3 @@
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Media;
 using WSnip.Core.Capture;
 using WSnip.Core.Strings;
 
@@ -18,8 +15,8 @@ public sealed record SnipModeOption(SnipMode Mode, string Label, string IconKey,
         new(SnipMode.WholeWindow, AppStrings.WholeWindow, "IconSnipWholeWindow", AppStrings.WholeWindowDescription),
     ];
 
-    /// <summary>The glyph from the application's icon resources.</summary>
-    public Geometry? Icon => Application.Current?.FindResource(IconKey) as Geometry;
+
+    public override string ToString() => Label;
 
     public static SnipModeOption For(SnipMode mode) => All.FirstOrDefault(o => o.Mode == mode) ?? All[0];
 }
@@ -30,6 +27,8 @@ public sealed record DelayOption(int Seconds)
     public static IReadOnlyList<DelayOption> All { get; } = [new(0), new(3), new(5), new(10)];
 
     public string Label => Seconds == 0 ? AppStrings.NoDelay : string.Format(AppStrings.Seconds, Seconds);
+
+    public override string ToString() => Label;
 
     public bool HasDelay => Seconds > 0;
 

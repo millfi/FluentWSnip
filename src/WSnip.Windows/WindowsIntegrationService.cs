@@ -8,10 +8,6 @@ namespace WSnip.Windows;
 /// DWM window integration: the Mica Alt backdrop, the caption theme and the display affinity
 /// that keeps the app's own windows out of its captures.
 /// </summary>
-/// <remarks>
-/// Avalonia's own Mica level only approximates the material inside the client area; a transparent
-/// window with the compositor's backdrop gives one material across the caption and the content.
-/// </remarks>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class WindowsIntegrationService : IWindowIntegrationService
 {

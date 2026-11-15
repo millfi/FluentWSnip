@@ -1,10 +1,8 @@
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Input.Platform;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
-using Avalonia.Threading;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Dispatching;
+using Windows.Graphics;
+using Window = WSnip.App.Services.AppWindowBase;
+using PixelPoint = Windows.Graphics.PointInt32;
 using LightStudio.Logging;
 using WSnip.App.Capture;
 using WSnip.App.Editor;
@@ -33,18 +31,19 @@ public sealed class AppController : IDisposable
     private readonly Application app;
     private readonly PlatformServices platform;
     private readonly SettingsStore store;
-    private readonly IClassicDesktopStyleApplicationLifetime lifetime;
+    private readonly DispatcherQueue dispatcher = DispatcherQueue.GetForCurrentThread();
     private readonly SemaphoreSlim startupSync = new(1, 1);
 
     /// <summary>The shortcuts of the settings, with why any of them is not in effect.</summary>
     private readonly List<(SnipMode? Mode, HotkeyGesture Gesture, string? Error)> hotkeys = [];
     private EditorWindow? editor;
-    private (PixelPoint Position, Size Size)? editorBounds;
+    private (PointInt32 Position, SizeInt32 Size)? editorBounds;
     private WindowState editorState;
     private SettingsWindow? settingsWindow;
-    private TrayIcon? tray;
-    private IDisposable? windowClosedSubscription;
-    private Bitmap? clipboardBitmap;
+    private NativeTray? tray;
+    private Window? backgroundHost;
+
+
     private bool capturing;
     private bool exiting;
     private bool hotkeysPaused;
@@ -52,12 +51,12 @@ public sealed class AppController : IDisposable
     private int startupOperations;
     private bool disposed;
 
-    public AppController(Application app, PlatformServices platform, SettingsStore store, IClassicDesktopStyleApplicationLifetime lifetime)
+    public AppController(Application app, PlatformServices platform, SettingsStore store)
     {
         this.app = app;
         this.platform = platform;
         this.store = store;
-        this.lifetime = lifetime;
+
         Settings = store.Load();
         if (!CanRunInBackground && Settings.LaunchAtStartup)
         {
@@ -75,7 +74,7 @@ public sealed class AppController : IDisposable
 
     public bool CanRunInBackground => CanRunInBackgroundWith(Settings);
 
-    private static bool CanRunInBackgroundWith(AppSettings settings) => OperatingSystem.IsWindows() &&
+    private static bool CanRunInBackgroundWith(AppSettings settings) =>
         (!string.IsNullOrWhiteSpace(settings.Hotkey) || settings.ModeHotkeys.Values.Any(value => !string.IsNullOrWhiteSpace(value)));
 
     /// <summary>Why the capture hotkey could not be registered, if it could not.</summary>
@@ -96,11 +95,11 @@ public sealed class AppController : IDisposable
     public void Start(IReadOnlyList<string> arguments)
     {
         Theme.Configure(Settings.Theme, Settings.UseMica);
-        platform.Hotkeys.Pressed += (_, gesture) => Dispatcher.UIThread.Post(() => OnHotkeyPressed(gesture));
+        platform.Hotkeys.Pressed += (_, gesture) => dispatcher.TryEnqueue(() => OnHotkeyPressed(gesture));
         RegisterHotkeys();
-        platform.SingleInstance.ArgumentsReceived += (_, forwarded) => Dispatcher.UIThread.Post(() => HandleArguments(forwarded, firstLaunch: false));
+        platform.SingleInstance.ArgumentsReceived += (_, forwarded) => dispatcher.TryEnqueue(() => HandleArguments(forwarded, firstLaunch: false));
         platform.SingleInstance.StartListening();
-        windowClosedSubscription = Window.WindowClosedEvent.AddClassHandler<Window>((_, _) => Dispatcher.UIThread.Post(ExitIfIdle));
+        Window.WindowClosed += OnWindowClosed;
         UpdateTray();
         _ = SyncLaunchAtStartupAsync();
         HandleArguments(arguments, firstLaunch: true);
@@ -263,7 +262,7 @@ public sealed class AppController : IDisposable
         if (startupChanged || wasBackgroundEnabled != backgroundEnabled)
             _ = SyncLaunchAtStartupAsync();
         editor?.OnSettingsChanged();
-        Dispatcher.UIThread.Post(ExitIfIdle);
+        dispatcher.TryEnqueue(ExitIfIdle);
     }
 
     /// <summary>
@@ -332,31 +331,9 @@ public sealed class AppController : IDisposable
             using Rendition rendition = SnipExporter.BuildSdr(snip, toneMap, flattenAlpha: false);
             return ClipboardImage.FromRendition(rendition);
         });
-        if (platform.Clipboard is { } system)
-        {
-            nint owner = EnsureEditor().TryGetPlatformHandle()?.Handle ?? 0;
-            system.SetImage(image, owner);
-            return;
-        }
-
-        // The windowing backend serves the image as PNG to apps that paste, so it stays alive while it is on the clipboard.
-        IClipboard clipboard = EnsureEditor().Clipboard ?? throw new InvalidOperationException(AppStrings.ClipboardUnavailable);
-        using Stream png = image.Png.AsStream();
-        var bitmap = new Bitmap(png);
-        try
-        {
-            await clipboard.SetBitmapAsync(bitmap);
-        }
-        catch
-        {
-            bitmap.Dispose();
-            throw;
-        }
-
-        clipboardBitmap?.Dispose();
-        clipboardBitmap = bitmap;
+        var system = platform.Clipboard ?? throw new InvalidOperationException(AppStrings.ClipboardUnavailable);
+        system.SetImage(image, EnsureEditor().Handle);
     }
-
     /// <summary>Writes a snip in the format that suits its content into the screenshot folder.</summary>
     public async Task<string> AutoSaveAsync(Snip snip)
     {
@@ -382,8 +359,10 @@ public sealed class AppController : IDisposable
         if (exiting)
             return;
         exiting = true;
+        AppLog.Information("Lifetime", "Exiting WSnip.");
         Dispose();
-        lifetime.Shutdown();
+        foreach (var window in Window.Windows.ToArray()) window.CloseSafely();
+        app.Exit();
     }
 
     public void Dispose()
@@ -393,14 +372,15 @@ public sealed class AppController : IDisposable
         disposed = true;
         editor?.Clear();
         settingsWindow?.Close();
-        windowClosedSubscription?.Dispose();
-        windowClosedSubscription = null;
+        Window.WindowClosed -= OnWindowClosed;
+        backgroundHost?.CloseSafely();
+        backgroundHost = null;
         tray?.Dispose();
         tray = null;
-        clipboardBitmap?.Dispose();
-        clipboardBitmap = null;
+
         platform.Hotkeys.Dispose();
         platform.SingleInstance.Dispose();
+        Theme.Dispose();
         // Do not tear down a D3D/PipeWire device or its semaphore while a capture owns it.
         // The capture's finally releases it if shutdown interrupts an operation.
         if (!capturing)
@@ -430,7 +410,7 @@ public sealed class AppController : IDisposable
     private void ExitIfIdle()
     {
         if (!CanRunInBackground && !exiting && !capturing && editorOperations == 0 && startupOperations == 0 &&
-            !lifetime.Windows.Any(window => window.IsVisible))
+            !Window.Windows.Any(window => window.IsVisible))
             Exit();
     }
 
@@ -471,14 +451,14 @@ public sealed class AppController : IDisposable
                 UpdateSettings(Settings.With(settings => settings.Mode = nextMode));
                 return nextMode;
             }
-            toolbar.Close();
+            toolbar.CloseSafely();
             if (window is null)
                 return null;
             capture = await platform.Capture.CaptureWindowAsync(window, new CaptureOptions { IncludeCursor = Settings.IncludeCursor });
         }
         finally
         {
-            toolbar?.Close();
+            toolbar?.CloseSafely();
         }
 
         using WindowCapture ownedCapture = capture;
@@ -496,9 +476,9 @@ public sealed class AppController : IDisposable
     private List<(Window Window, Window? Owner)> HideWindows()
     {
         editor?.PrepareForCapture();
-        List<(Window Window, Window? Owner)> hidden = lifetime.Windows
+        List<(Window Window, Window? Owner)> hidden = Window.Windows
             .Where(w => w.IsVisible)
-            .Select(w => (w, w.Owner as Window))
+            .Select(w => (w, (Window?)null))
             .ToList();
 
         // Owned windows go first, so an owner is never hidden while its dialogs are still up.
@@ -514,9 +494,9 @@ public sealed class AppController : IDisposable
             return;
         foreach ((Window window, Window? owner) in hidden)
         {
-            if (window.IsVisible || !lifetime.Windows.Contains(window))
+            if (window.IsVisible || !Window.Windows.Contains(window))
                 continue;
-            if (owner is { IsVisible: true } && lifetime.Windows.Contains(owner))
+            if (owner is { IsVisible: true } && Window.Windows.Contains(owner))
                 window.Show(owner);
             else
                 window.Show();
@@ -583,38 +563,21 @@ public sealed class AppController : IDisposable
         editor = window;
         if (editorBounds is { } bounds)
         {
-            window.WindowStartupLocation = WindowStartupLocation.Manual;
             window.Position = bounds.Position;
-            window.Width = bounds.Size.Width;
-            window.Height = bounds.Size.Height;
+            window.PixelSize = bounds.Size;
         }
         window.WindowState = editorState;
         Theme.Attach(window);
         void RememberBounds()
         {
             if (window.IsVisible && window.WindowState == WindowState.Normal)
-                editorBounds = (window.Position, window.ClientSize);
+                editorBounds = (window.Position, window.PixelSize);
         }
         window.PositionChanged += (_, _) => RememberBounds();
+        window.SizeChanged += (_, _) => RememberBounds();
         window.Opened += (_, _) => RememberBounds();
-        window.PropertyChanged += (_, e) =>
-        {
-            if (e.Property == TopLevel.ClientSizeProperty)
-                RememberBounds();
-        };
-        window.Closing += (_, _) =>
-        {
-            editorState = window.WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
-        };
-        window.Closed += (_, _) =>
-        {
-            // Explicit shutdown keeps the tray alive. Really closing (rather than hiding) also
-            // releases full-resolution composition layers and swapchain buffers held by Windows.
-            if (ReferenceEquals(editor, window))
-                editor = null;
-            if (ReferenceEquals(lifetime.MainWindow, window))
-                lifetime.MainWindow = null;
-        };
+        window.Closing += (_, _) => editorState = window.WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+        window.Closed += (_, _) => { if (ReferenceEquals(editor, window)) editor = null; };
         return window;
     }
 
@@ -693,7 +656,7 @@ public sealed class AppController : IDisposable
         {
             startupSync.Release();
             startupOperations--;
-            Dispatcher.UIThread.Post(ExitIfIdle);
+            dispatcher.TryEnqueue(ExitIfIdle);
         }
     }
 
@@ -702,45 +665,33 @@ public sealed class AppController : IDisposable
         if (CanRunInBackground)
         {
             if (tray is null)
+            {
+                backgroundHost = new Window { Title = "WSnip background" };
+                backgroundHost.AppWindow.IsShownInSwitchers = false;
                 CreateTray();
+            }
         }
         else if (tray is not null)
         {
-            TrayIcon.SetIcons(app, []);
+
             tray.Dispose();
             tray = null;
+            backgroundHost?.CloseSafely();
+            backgroundHost = null;
         }
     }
 
-    private void CreateTray()
-    {
-        var menu = new NativeMenu();
-        menu.Items.Add(MenuItem(AppStrings.NewSnip, () => _ = StartSnipAsync()));
-        menu.Items.Add(MenuItem(AppStrings.OpenWSnip, () => ShowEditor()));
-        menu.Items.Add(MenuItem(AppStrings.OpenFolder, () => platform.Shell.OpenFolder(SaveFolder)));
-        menu.Items.Add(MenuItem(AppStrings.Settings, ShowSettings));
-        menu.Items.Add(new NativeMenuItemSeparator());
-        menu.Items.Add(MenuItem(AppStrings.Exit, Exit));
+    private void OnWindowClosed() => dispatcher.TryEnqueue(ExitIfIdle);
 
-        using Stream icon = AssetLoader.Open(new Uri("avares://WSnip.App/Assets/wsnip.ico"));
-        tray = new TrayIcon
-        {
-            Icon = new WindowIcon(icon),
-            ToolTipText = "WSnip",
-            Menu = menu,
-            IsVisible = true,
-        };
-        tray.Clicked += (_, _) => ShowEditor();
-        TrayIcon.SetIcons(app, [tray]);
-    }
-
-    private static NativeMenuItem MenuItem(string header, Action action)
-    {
-        var item = new NativeMenuItem(header);
-        item.Click += (_, _) => action();
-        return item;
-    }
-
+    private void CreateTray() => tray = new NativeTray(
+    [
+        (AppStrings.NewSnip, () => _ = StartSnipAsync()),
+        (AppStrings.OpenWSnip, () => ShowEditor()),
+        (AppStrings.OpenFolder, () => platform.Shell.OpenFolder(SaveFolder)),
+        (AppStrings.Settings, ShowSettings),
+        (string.Empty, null),
+        (AppStrings.Exit, Exit),
+    ], () => ShowEditor());
     private static string UniquePath(string path)
     {
         if (!File.Exists(path))

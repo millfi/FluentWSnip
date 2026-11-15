@@ -1,40 +1,38 @@
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Layout;
-using Avalonia.Media;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using WSnip.Core.Strings;
 
 namespace WSnip.App.Services;
 
-/// <summary>A minimal informational dialog.</summary>
 public static class MessageDialog
 {
-    public static void Show(Window? owner, string title, string message)
+    public static async void Show(AppWindowBase? owner, string title, string message)
     {
-        var ok = new Button { Content = AppStrings.OK, Classes = { "accent" }, HorizontalAlignment = HorizontalAlignment.Right, MinWidth = 80 };
-        var window = new Window
+        owner ??= AppWindowBase.Windows.FirstOrDefault(w => w.IsVisible);
+        AppWindowBase? temporary = null;
+        if (owner?.Content is not FrameworkElement { XamlRoot: not null })
         {
-            Title = title,
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
-            Content = new StackPanel
+            temporary = new AppWindowBase { Title = title, Content = new Grid() };
+            temporary.SetSize(480, 240);
+            temporary.Show();
+            owner = temporary;
+        }
+        try
+        {
+            if (owner.Content is not FrameworkElement root) return;
+            if (root.XamlRoot is null)
             {
-                Margin = new Avalonia.Thickness(20),
-                Spacing = 16,
-                Children =
-                {
-                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
-                    ok,
-                },
-            },
-        };
-        window.Bind(TemplatedControl.BackgroundProperty, window.GetResourceObservable("AppPageBackgroundBrush"));
-        ok.Click += (_, _) => window.Close();
-        if (owner is not null)
-            window.Show(owner);
-        else
-            window.Show();
+                var loaded = new TaskCompletionSource();
+                root.Loaded += OnLoaded;
+                void OnLoaded(object sender, RoutedEventArgs e) { root.Loaded -= OnLoaded; loaded.TrySetResult(); }
+                await loaded.Task;
+            }
+            await new ContentDialog { XamlRoot = root.XamlRoot, Title = title, Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap }, CloseButtonText = AppStrings.OK, RequestedTheme = root.ActualTheme }.ShowAsync();
+        }
+        catch (System.Runtime.InteropServices.COMException exception)
+        {
+            LightStudio.Logging.AppLog.Warning("Dialog", "Could not show the error dialog.", exception);
+        }
+        finally { temporary?.CloseSafely(); }
     }
 }

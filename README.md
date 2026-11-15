@@ -5,8 +5,7 @@ gamut content. Screens are captured at 16-bit float precision. SDR content stays
 HDR highlights are saved as gain-map images: SDR viewers show a tone-mapped base image, and HDR
 viewers restore the original brightness.
 
-WSnip runs on Windows and KDE; see [Linux](#linux) for what differs there. HDR / WCG is currently
-only supported on Windows.
+WSnip is a Windows-only application built with WinUI 3 (Windows App SDK).
 
 [![Get it from Microsoft](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/9PDM1H21NLB9)
 
@@ -21,7 +20,7 @@ only supported on Windows.
   other windows and its own per-pixel transparency, so the snip has no desktop behind it. Esc or
   right-click cancels, and WSnip's windows come back either way.
 - **Entry points:**
-  - On Windows, a global hotkey, **Win+Shift+H** by default. It can be changed, set to Print Screen
+  - On Windows, a global hotkey with a user-assigned combination. It can be changed, set to Print Screen
     or turned off. Each snipping mode can have a hotkey of its own too. WSnip refuses a hotkey
     that another of its hotkeys, another app or Windows already uses.
   - On Windows, a notification-area icon.
@@ -35,7 +34,7 @@ only supported on Windows.
   - Pen, highlighter, eraser and crop tools, with undo/redo, zoom and pan.
   - A floating bottom dock with a blurred backdrop and HDR-aware icons. Fit keeps the image
     above the dock; zoomed images can extend behind it and pan fully into the unobstructed area.
-  - On an HDR display it draws into an FP16 scRGB surface, so highlights show at their captured
+  - On an HDR display it draws into a Win2D FP16 scRGB composition swap chain, so highlights show at their captured
     brightness, rolled off to the display's headroom. A toggle switches to the SDR rendition that
     SDR files and the clipboard get.
   - Custom pen colors on sRGB, Display P3 or BT.2020 primaries, with a brightness up to 16× SDR
@@ -61,13 +60,12 @@ only supported on Windows.
 WSnip follows the system UI language at startup: en-US (the default and fallback), en-GB,
 es-ES, fr-FR, de-DE, ja-JP, zh-CN and zh-TW. There is no in-app language setting.
 
-UI text uses standard .NET RESX resources in `src/WSnip.Core/Strings`, accessed from Avalonia
-XAML with `x:Static` and from C# through `AppStrings`. MSBuild generates the strongly typed
+UI text uses the existing .NET RESX resources in `src/WSnip.Core/Strings`, accessed from WinUI
+XAML through compiled static `x:Bind` expressions and from C# through `AppStrings`. MSBuild generates the strongly typed
 accessor and satellite resource assemblies; no custom localization generator is required.
 British English overrides spelling differences and inherits unchanged strings from the neutral
 en-US catalog. Other translations contain every resource key. Keep composite-format placeholders
-such as `{0}` and `{1:0.00}` intact when editing translations. Linux launcher actions use the
-standard localized entries in the desktop file.
+such as `{0}` and `{1:0.00}` intact when editing translations.
 
 ## Output formats
 
@@ -84,8 +82,7 @@ effort (1), matching Light Player's video screenshots.
 | JPEG XL | 8-bit sRGB through libjxl | 16-bit BT.2100 PQ (no gain map) |
 | PNG (HDR) | — | 16-bit BT.2100 PQ with `cICP` and `cLLI` |
 
-HEIC, AVIF and JPEG XL use FFmpeg from `LightStudio.Ffmpeg` on Windows and from the system or
-Flatpak runtime on Linux. HEIC and AVIF prefer software encoders and fall back to hardware encoders
+HEIC, AVIF and JPEG XL use FFmpeg from `LightStudio.Ffmpeg` on Windows. HEIC and AVIF prefer software encoders and fall back to hardware encoders
 that successfully open on the local device, using Light Player's shared still-image encoder probe.
 A format without an applicable encoder is hidden, and automatic saves fall back to PNG or UltraHDR
 JPEG. Large images are tiled when they exceed the encoder's picture-size limit.
@@ -138,261 +135,104 @@ window as well as its image; screenshot cleanup does not depend on a forced garb
 GPU/driver caches and OS-owned clipboard data have separate lifetimes, so process working set
 need not fall by exactly the released pixel byte count.
 
-## Linux
+## Projects
 
-WSnip uses the Avalonia fork's Wayland backend in Wayland sessions, and X11 otherwise. What
-differs from Windows:
+- `WSnip.App`: the Windows executable, WinUI editor, frozen-screen overlays, settings, native tray,
+  theme/backdrop integration, and FP16 image presentation.
+- `WSnip.Windows`: Windows.Graphics.Capture, display color information, native window picking,
+  global hotkeys, clipboard, single-instance forwarding, and shell integration.
+- `WSnip.Core`: capture models, annotation history, tone mapping, HDR/WCG analysis, and encoders.
 
-- **Capture** on KDE Plasma goes through KWin's screencast protocol where KWin grants it to WSnip
-  (see [KWin screencast access](#kwin-screencast-access)). KWin streams every display to PipeWire
-  without asking and leaves WSnip's own windows out, so they stay open. Otherwise capture goes
-  through the desktop's ScreenCast portal (xdg-desktop-portal) and PipeWire. The first snip opens
-  the system's screen sharing dialog: share the displays to snip and allow restoring, and later
-  snips skip the dialog. WSnip's windows can't be left out of a portal capture, so they hide while
-  one is taken. Compositors share 8-bit SDR frames for now (KWin offers nothing wider, on either
-  path), so snips are SDR. The frames become the same relative linear image as on Windows, so
-  wide-gamut and HDR formats can follow once compositors offer them. Without PipeWire or the
-  portal, WSnip says what to install.
-- **Overlay:** Wayland apps can't place their windows, so one full-screen overlay opens on the
-  display the compositor picks and shows that display.
-- **Window mode** snips the whole display, as Wayland doesn't tell apps where windows are.
-- **Whole window mode** on KDE Plasma picks the window with KWin's own pointer, which it asks for
-  over KWin's D-Bus interface (`org.kde.KWin`), and KWin streams that window whole. This needs
-  KWin's screencast; otherwise the window is picked in the system's sharing dialog instead of with a
-  click on the live screen.
-- **Hotkey:** Wayland gives apps no global hotkeys. Bind a shortcut to the desktop entry's
-  **New snip**, **Rectangle snip**, **Window snip**, **Full screen snip**, **Freeform snip**, or
-  **Whole window snip** action (KDE: System Settings > Keyboard > Shortcuts), or to
-  `wsnip --snip [rectangle|window|fullscreen|freeform|wholewindow]`.
-- **Clipboard:** the SDR rendition as PNG. It can be pasted while WSnip is open; preserving it
-  after exit depends on the desktop's clipboard manager.
-- **Lifetime:** WSnip exits when its windows are closed and any active capture has finished.
+The image pipeline keeps linear scRGB data, including negative wide-gamut components and values
+above SDR white. `HdrSurface` draws through a premultiplied FP16 Skia surface into a Win2D
+`R16G16B16A16Float` swap chain. The captured SDR white is normalized by the document; presentation
+scales it to the current monitor's SDR white in Windows' 80-nit scRGB units. Displays without
+advanced color show the tone-mapped sRGB rendition. GPUs without FP16 swap-chain support use an
+explicit SDR fallback. Moving between displays and changing HDR refreshes the presentation state.
 
-### KWin screencast access
+## Build and run
 
-KWin offers its screencast protocol, `zkde_screencast_unstable_v1`, only to apps whose desktop
-entry lists it in `X-KDE-Wayland-Interfaces`. The log (see [Files](#files)) says which way the
-displays are captured.
+Requirements: Windows 10 2004 or later (Mica requires Windows 11), .NET 10 SDK, WinApp CLI 0.7+
+for packaged development runs, and LLVM/libclang for the shared FFmpeg binding generator.
+Visual Studio 2026's Windows application packaging tools are needed for the legacy `.wapproj`.
 
-- **Flatpak:** KWin reads the entry named after the app ID, and the Flatpak's entry lists the
-  protocol. Recent Flatpak releases, such as 1.18.4 and 1.19.2, leave that key out of the entries
-  they install; there, a copy of the entry that keeps it grants the protocol:
-
-  ```sh
-  cp ~/.local/share/flatpak/exports/share/applications/im.hjc.WSnip.desktop ~/.local/share/applications/
-  sed -i '/^\[Desktop Entry\]$/a X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1' \
-    ~/.local/share/applications/im.hjc.WSnip.desktop
-  ```
-
-  A system-wide install keeps its entry in `/var/lib/flatpak/exports/share/applications`. The
-  Flatpak reads the streams from the PipeWire daemon (`--filesystem=xdg-run/pipewire-0`) and talks
-  to KWin over D-Bus (`--talk-name=org.kde.KWin`).
-- **Other builds:** KWin looks for an entry whose `Exec` is the absolute path of the WSnip
-  executable, such as this one in `~/.local/share/applications`:
-
-  ```ini
-  [Desktop Entry]
-  Type=Application
-  Name=WSnip
-  Exec=/opt/wsnip/WSnip
-  NoDisplay=true
-  X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1
-  ```
-
-## Architecture
-
-```
-src/
-  WSnip.Core      net10.0, AOT-compatible. Imaging, tone mapping, gain maps, encoders, annotations,
-                  settings and the platform interfaces. No UI and no OS dependencies.
-  WSnip.App       Avalonia UI (cross-platform): overlay, editor, settings, tray, theming.
-  WSnip.Windows   Windows implementations of the platform interfaces.
-  WSnip.Linux     Linux implementations: KWin screencast, ScreenCast portal and PipeWire capture,
-                  KWin window picking, D-Bus single instance, freedesktop shell integration.
-  WSnip.Desktop   Head for Windows and Linux: the WSnip executable and NativeAOT; on Windows also
-                  the manifest and FFmpeg bundling.
-```
-
-Platform features are reached only through the interfaces in `WSnip.Core.Platform`:
-
-- `IScreenCaptureService` (displays, and single windows from the compositor)
-- `IWindowPickerService` (pointing at a window on the live screen)
-- `IGlobalHotkeyService`
-- `IWindowIntegrationService` (Mica, frame theme, exclusion from capture, window placement, cursor
-  position)
-- `IShellService`
-- `IClipboardService` (optional; Avalonia's clipboard serves without one)
-- `ISingleInstanceService`
-
-To port WSnip to another OS, implement these interfaces and create them in `Program.CreatePlatform`
-of `WSnip.Desktop`.
-
-Shared with Light Player (`..\LightPlayer`, source unchanged):
-
-- `LightStudio.Logging`
-- `LightStudio.FfmpegShim`, including still-image encoder discovery and software/hardware encoding
-- `tools/NativeBindings`, which generates the shim's native interop from FFmpeg headers
-- The photo viewer's blur backdrop, HDR-aware foreground brushes and zoom animation
-- `build/GitHubNuGet.targets`, which downloads and verifies GitHub release packages
-- `packaging/flatpak/nuget-sources.py`, which pins the NuGet packages of the offline Flatpak build
-- `Directory.Packages.props`, which keeps shared package versions and GitHub release hashes aligned
-- The Avalonia 12.1.4 packages and fork (`12.1.5-custom.20`), including the `ExtendedLinear` color mode of
-  the Win32 and Wayland backends that provides the FP16 scRGB surface
-
-## Building
-
-Requirements:
-
-- Windows 10 2004 (build 19041) or later. HDR capture and display need an HDR-enabled display.
-- Or Linux with PipeWire and xdg-desktop-portal with the desktop's backend, such as
-  xdg-desktop-portal-kde. HEIC, AVIF and JPEG XL use the system's FFmpeg 9 libraries. Building needs
-  their development headers and pkg-config modules (`libavcodec`, `libavformat`, `libavutil`,
-  `libavfilter`, `libswresample` and `libswscale`).
-- .NET SDK 10.0.301 or later 10.0 feature band, as pinned in `global.json`.
-- A [Light Player main](https://github.com/hjc4869/LightPlayer/tree/main) checkout next to this
-  repository (`..\LightPlayer`). To use another location, set `-p:LightPlayerRoot=...\`.
-- NuGet restore downloads the Avalonia fork and Light Studio packages from GitHub Releases,
-  verifies their SHA-256 hashes, and prepares a local feed in Light Player's
-  `artifacts/github-nuget/packages`. Other packages come from nuget.org.
-- libclang for the build host: for example `libclang-dev` on Debian/Ubuntu or LLVM on Windows
-  (`winget install --id LLVM.LLVM --exact`). Windows NativeAOT builds also need Visual Studio's
-  C++ build tools for each target architecture.
-
-NativeAOT builds statically link the SkiaSharp, HarfBuzzSharp and ANGLE graphics dependencies
-through `LightStudio.AvaloniaStatic`, as Light Player does. Non-AOT builds use shared libraries.
-Linux NativeAOT linking also needs Clang/LLD and the development libraries for fontconfig,
-OpenGL, X11 and Xext.
-
-FFmpeg calls use the shim's generated NativeBindings API, with no managed binding-loader
-initialization. Linux bindings are generated from the installed development headers; Flatpak builds
-use the SDK's FFmpeg 8.1 headers. Windows uses the `LightStudio.Ffmpeg` 9.0.2 binding profile and
-links FFmpeg statically when NativeAOT is enabled; non-AOT builds use the package's shared libraries.
-Available HEIC/AVIF encoders depend on those libraries and the local GPU and driver; no separate
-FFmpeg build is downloaded for software image encoders.
+The application continues to use Light Player's logging and FFmpeg shim. Check it out beside this
+repository as `../LightPlayer`, or inside `.deps/LightPlayer` (ignored by Git), or pass an absolute
+`-p:LightPlayerRoot=...` ending in a directory separator. NuGet restore fetches the FFmpeg release
+package from Light Player's public release feed. There are no Avalonia runtime dependencies.
 
 ```powershell
-# Debug build
-dotnet build src\WSnip.Desktop -p:Platform=x64
-
-# NativeAOT build: artifacts\publish\WSnip.Desktop\release_win-x64_static\WSnip.exe
-dotnet publish src\WSnip.Desktop -c Release -r win-x64 -p:Platform=x64
+git clone https://github.com/hjc4869/LightPlayer.git .deps/LightPlayer
+dotnet build WSnip.slnx -p:Platform=x64
+winapp run src/WSnip.App/WSnip.App.csproj --arch x64 -p Platform=x64
 ```
 
-For ARM64, use `-p:Platform=ARM64 -r win-arm64`.
+For ARM64, use `-p:Platform=ARM64 -r win-arm64`. `WSnip.App` is now the executable project;
+`WSnip.Desktop` and the Linux projects have been removed.
 
-On Linux, the `Makefile` wraps the same commands. It passes `LIGHTPLAYER_ROOT` (by default
-`../LightPlayer`) as `LightPlayerRoot`. `make flatpak` ignores it and uses the pinned release instead:
+Normal builds and publishes use self-contained .NET and Windows App SDK runtimes. WinUI and
+Win2D native files ship alongside the executable; this is not a single-file application. The former
+Avalonia static graphics packages and platform initialization have been removed.
 
-```sh
-make                        # Release build
-make run
-make publish                # NativeAOT: artifacts/publish/WSnip.Desktop/release_linux-x64/WSnip
-make publish RID=linux-arm64
+```powershell
+dotnet publish src/WSnip.App -c Release -r win-x64 -p:Platform=x64
 ```
 
-## Packaging
+## Packaging and releases
 
-Windows packages include the self-contained NativeAOT build with statically linked LGPL FFmpeg
-libraries.
+The application includes its own `Package.appxmanifest` for single-project WinUI packaging:
 
-- **MSIX bundle** (`packaging\WSnipMSIX`): x64 and ARM64 in one sideload bundle, signed with the
-  Light Studio certificate (`CN=Light Studio, O=Light Studio, C=US`). It declares a startup task
-  for "Start with Windows" (package registry writes are private, so the Run key does not work),
-  a `WSnip.exe` execution alias, and the capability to capture without the yellow border. The
-  package keeps settings and logs in its own application data. Building it needs Visual Studio's
-  MSBuild with the Windows application packaging tools:
+```powershell
+winapp package src/WSnip.App/WSnip.App.csproj --arch x64 --arch arm64 --no-sign
+```
 
-  ```powershell
-  $env:RuntimeIdentifiers = 'win-x64;win-arm64'
-  msbuild packaging\WSnipMSIX\WSnipMSIX.wapproj /restore /p:Configuration=Release /p:Platform=x64 `
-    /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Always '/p:AppxBundlePlatforms=x64|ARM64' `
-    /p:AppxPackageSigningEnabled=false
-  ```
+The existing `packaging/WSnipMSIX/WSnipMSIX.wapproj` also targets the WinUI application, for the
+signed sideload bundle built by CI. It retains the existing package identity, startup task,
+`WSnip.exe` execution alias, screen-clipping protocol, and borderless capture capabilities.
+`packaging/Set-Version.ps1 -Tag v1.2.3` stamps both manifests and the assembly version.
 
-  To sign locally, copy the PFX to `packaging\WSnipMSIX\WSnipMSIX_TemporaryKey.pfx`, set
-  `$env:PackageCertificatePassword` and drop `/p:AppxPackageSigningEnabled=false`.
-- **Setup executables** (`packaging\WSnipSetup`, WiX 5.0.2): one per architecture, installing for
-  all users under `Program Files\WSnip` with a Start menu shortcut and an App Paths entry.
-  `packaging\WSnipSetup\build.ps1 [-Architecture x64,arm64]` publishes, builds the MSI and wraps
-  it in `artifacts\release\WSnipSetup-<arch>.exe`. The setup shows `LICENSE` and `THIRDPARTY.txt`,
-  and installs both next to `WSnip.exe`.
-- **Flatpak** (`packaging/flatpak`, app ID `im.hjc.WSnip`): `make flatpak` publishes the NativeAOT
-  build inside the `org.freedesktop.Sdk` 26.08 sandbox with the .NET 10 SDK extension, restoring
-  offline from pinned NuGet packages, and writes
-  `artifacts/flatpak-x86_64/im.hjc.WSnip-x86_64.flatpak`; `make flatpak-install` also installs it
-  for the current user. FFmpeg 8.1 and PipeWire come from the `org.freedesktop.Platform` runtime.
-  It needs `flatpak`, `flatpak-builder`, `python3` and `curl`; the first build installs the SDK and
-  its .NET 10 and LLVM 22 extensions from Flathub. The Flatpak builds against the Light Player release
-  tag pinned (URL and SHA-256) in the manifest, not against `../LightPlayer`: `make flatpak` downloads
-  it into `artifacts/lightplayer` to pin the NuGet packages, and flatpak-builder fetches the same
-  archive for the build. To move to another Light Player release, change the manifest's archive
-  `url` and `sha256`. Add a `<release>` to the metainfo for each version.
+`packaging/WSnipSetup/build.ps1 [-Architecture x64,arm64]` builds the existing WiX installers from
+an unpackaged self-contained WinUI publish, including the Windows App SDK runtime. The MSIX
+configuration remains the default for development and distribution.
 
-`packaging\Set-Version.ps1 -Tag v1.2.3` stamps one version into `Directory.Build.props` and the MSIX
-manifest; the release workflow runs it with the release tag.
-
-## Releases
-
-`.github/workflows/release.yml` builds the MSIX bundle, the setup executables and the Flatpak
-bundles for x64 and ARM64 and publishes them in a GitHub Release when a `v*` tag is pushed, or when
-it is run from the Actions tab with a tag. The Windows jobs check out the public
-[hjc4869/LightPlayer](https://github.com/hjc4869/LightPlayer) repository next to WSnip, as local builds
-expect; the Flatpak jobs download the release tag pinned in the Flatpak manifest instead. No deploy
-key or additional repository-access secret is needed.
-
-One-time setup of the WSnip repository (**Settings > Secrets and variables > Actions**):
-
-| Secret | Contents |
-| --- | --- |
-| `WINDOWS_SIGNING_CERTIFICATE_BASE64` | MSIX Signing PFX |
-| `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` | Its password |
-
-- Base64-encode the Windows signing PFX with
-  `[Convert]::ToBase64String([IO.File]::ReadAllBytes('WSnip-Signing.pfx'))` and store the result in
-  `WINDOWS_SIGNING_CERTIFICATE_BASE64`; store its password in `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`.
-  Keep the PFX and password in a secure location, since GitHub never shows a secret again. Use the
-  same signing certificate for subsequent releases so installed copies can update in place.
-- The workflow asks for `contents: write` itself to create the release; nothing else needs
-  changing unless the repository owner restricts workflow permissions.
-- Optionally set the repository variable `LIGHTPLAYER_REF` to pin the Light Player branch, tag or
-  commit built against. Tag-triggered releases default to `main`; a manual run can override the ref.
-
-The Windows jobs use the `windows-2025-vs2026` image, as Light Player does: the .NET 10 SDK needs
-MSBuild 18, and the `.wapproj` builds only with Visual Studio's MSBuild. The Flatpak jobs run
-`make flatpak` on the `ubuntu-26.04` and `ubuntu-26.04-arm` images, so each architecture builds
-natively.
+The release workflow builds Windows x64/ARM64 MSIX and setup artifacts only. Signing still uses
+`WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`; the optional
+`LIGHTPLAYER_REF` repository variable selects the shared dependency revision.
 
 ## Files
 
-- Settings: `%APPDATA%\WSnip\settings.json`; the MSIX package keeps them in its own local
-  application data (`%LOCALAPPDATA%\Packages\LightStudio.WSnip_<id>\LocalState\WSnip`)
-- Log: `logs\wsnip.log` next to the settings
-- Snips: the system Screenshots folder (usually `Pictures\Screenshots`), or the folder chosen in
-  settings
-- Launch at startup: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\WSnip`, or the package's
-  startup task for the MSIX
-- On Linux: settings in `~/.config/WSnip` (`~/.var/app/im.hjc.WSnip/config/WSnip` for the
-  Flatpak), snips in `~/Pictures/Screenshots`, and launch at startup in
-  `~/.config/autostart/im.hjc.WSnip.desktop`. `screencast-restore-token` next to the settings
-  restores the displays shared through the portal; delete it to choose them again.
+- Settings: `%APPDATA%\WSnip\settings.json`; the MSIX package uses its own application data at
+  `%LOCALAPPDATA%\Packages\LightStudio.WSnip_<id>\LocalState\WSnip`.
+- Logs: `logs\wsnip.log` beside the settings.
+- Snips: the Windows Screenshots folder, or the folder selected in settings.
+- Startup: the MSIX startup task or, for the setup installation, the user's Run key.
+
+Existing settings, custom colors, export formats, and eight UI language catalogs are retained.
+
+## Validation
+
+```powershell
+dotnet test tests/WSnip.Rendering.Tests -p:Platform=x64
+winapp run src/WSnip.App/WSnip.App.csproj --arch x64 -p Platform=x64 -- --presentation-fixture
+```
+
+The six presentation regression tests cover HDR highlights, negative wide-gamut components,
+SDR white scaling, matching multiply highlighters to export, and image lifetime. The Debug-only
+fixture shows SDR/HDR ramps and P3 colors without capturing the desktop; it is excluded from
+Release builds. Actual HDR appearance still requires a suitable display and Windows HDR enabled.
 
 ## Known limitations
 
-- Linux captures SDR only, and a Wayland overlay covers one display, so a snip can't span
-  displays there. The Linux version has been developed on KDE Plasma 6.7; other desktops are
-  untested.
-- Whole window snips keep the transparency a window draws itself. Windows 11's rounded corners
-  and a window-wide opacity set with `SetLayeredWindowAttributes` are applied by the compositor
-  afterwards and are not part of the captured window.
-- HEVC needs dimensions that are a multiple of 8. HEIC images are padded and then cropped back
-  with a `clap` box. Readers that ignore `clap` show a few extra edge pixels.
-- JPEG XL keeps HDR as PQ rather than a gain map, because FFmpeg's libjxl wrapper can't write JPEG
-  XL gain maps.
-- It has been tested on one 4K HDR display. Snips that span displays with different SDR white
-  levels are composed in relative light but have not been tested.
+- Whole-window snips retain a window's own transparency. Rounded corners and whole-window
+  opacity applied later by DWM are not part of its captured surface.
+- HEVC dimensions are padded to multiples of eight and cropped using a `clap` box.
+- JPEG XL stores HDR as PQ rather than as a gain map.
+- Actual peak brightness, multiple-monitor HDR/SDR-white matching, and display color depend on
+  the monitor, GPU, driver, and Windows advanced-color configuration.
 
 ## License
 
 Copyright (c) 2026 David Huang. **All rights reserved.**
 
-This project is **source-available for reference and private, personal, non-redistributable use only**; it is currently *not* FOSS licensed. See [LICENSE](LICENSE) for the full terms.
+This project is **source-available for reference and private, personal, non-redistributable use
+only**; it is not FOSS licensed. See [LICENSE](LICENSE).

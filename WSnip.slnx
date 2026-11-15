@@ -5,6 +5,7 @@
   </Configurations>
   <Folder Name="/src/">
     <Project Path="src/WSnip.App/WSnip.App.csproj">
+      <BuildDependency Project="src/WSnip.Windows/WSnip.Windows.csproj" />
       <Platform Solution="*|ARM64" Project="ARM64" />
       <Platform Solution="*|x64" Project="x64" />
     </Project>
@@ -12,25 +13,15 @@
       <Platform Solution="*|ARM64" Project="ARM64" />
       <Platform Solution="*|x64" Project="x64" />
     </Project>
-    <Project Path="src/WSnip.Desktop/WSnip.Desktop.csproj">
-      <Platform Solution="*|ARM64" Project="ARM64" />
-      <Platform Solution="*|x64" Project="x64" />
-    </Project>
-    <Project Path="src/WSnip.Linux/WSnip.Linux.csproj">
-      <Platform Solution="*|ARM64" Project="ARM64" />
-      <Platform Solution="*|x64" Project="x64" />
-    </Project>
     <Project Path="src/WSnip.Windows/WSnip.Windows.csproj">
+      <BuildDependency Project="src/WSnip.Core/WSnip.Core.csproj" />
       <Platform Solution="*|ARM64" Project="ARM64" />
       <Platform Solution="*|x64" Project="x64" />
     </Project>
   </Folder>
-  <Folder Name="/shared/">
-    <Project Path="../LightPlayer/src/LightStudio.FfmpegShim/LightStudio.FfmpegShim.csproj">
-      <Platform Solution="*|ARM64" Project="ARM64" />
-      <Platform Solution="*|x64" Project="x64" />
-    </Project>
-    <Project Path="../LightPlayer/src/LightStudio.Logging/LightStudio.Logging.csproj">
+  <Folder Name="/tests/">
+    <Project Path="tests/WSnip.Rendering.Tests/WSnip.Rendering.Tests.csproj">
+      <BuildDependency Project="src/WSnip.App/WSnip.App.csproj" />
       <Platform Solution="*|ARM64" Project="ARM64" />
       <Platform Solution="*|x64" Project="x64" />
     </Project>

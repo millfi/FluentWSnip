@@ -25,7 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(LightPlayerRoot)src\LightStudio.Logging\LightStudio.Logging.csproj" />
-    <ProjectReference Include="$(LightPlayerRoot)src\LightStudio.FfmpegShim\LightStudio.FfmpegShim.csproj" />
+    <ProjectReference Include="$(LightPlayerRoot)src\LightStudio.Logging\LightStudio.Logging.csproj"
+                      AdditionalProperties="DirectoryPackagesPropsPath=$(MSBuildThisFileDirectory)..\..\Directory.Packages.props;LightPlayerRoot=$(LightPlayerRoot);UseAvaloniaFork=false" />
+    <ProjectReference Include="$(LightPlayerRoot)src\LightStudio.FfmpegShim\LightStudio.FfmpegShim.csproj"
+                      AdditionalProperties="DirectoryPackagesPropsPath=$(MSBuildThisFileDirectory)..\..\Directory.Packages.props;LightPlayerRoot=$(LightPlayerRoot);UseAvaloniaFork=false" />
   </ItemGroup>
 </Project>

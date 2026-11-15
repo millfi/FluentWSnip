@@ -1,873 +1,302 @@
+using System.Diagnostics;
 using System.Numerics;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Media;
-using Avalonia.Threading;
-using LightMediaRenderer.Avalonia.Controls;
+using Microsoft.UI.Input;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
+using SkiaSharp;
+
+using Windows.Foundation;
 using WSnip.App.Rendering;
+using WSnip.App.Services;
 using WSnip.Core.Editing;
 using WSnip.Core.Imaging;
-using PixelRect = WSnip.Core.Imaging.PixelRect;
-using Vector = Avalonia.Vector;
 
 namespace WSnip.App.Editor;
 
-public enum EditorTool
-{
-    Select,
-    Pen,
-    Highlighter,
-    Eraser,
-    Crop,
-}
-
-/// <summary>The image pixel under the pointer and where the pointer is in the canvas.</summary>
+public enum EditorTool { Select, Pen, Highlighter, Eraser, Crop }
 public readonly record struct PixelHover(int X, int Y, Point Position);
 
-/// <summary>
-/// Shows the snip being edited with zoom and pan, and turns pointer input into strokes, erasures
-/// and a crop rectangle. Zoom 1 shows one image pixel per display pixel.
-/// </summary>
-public sealed class SnipCanvas : Control, Avalonia.Rendering.ICustomHitTest
+/// <summary>WinUI pointer input and a full precision image viewport, in physical-pixel zoom units.</summary>
+public sealed class SnipCanvas : HdrSurface
 {
-    public static readonly StyledProperty<EditorDocument?> DocumentProperty =
-        AvaloniaProperty.Register<SnipCanvas, EditorDocument?>(nameof(Document));
-
-    public static readonly StyledProperty<EditorTool> ToolProperty =
-        AvaloniaProperty.Register<SnipCanvas, EditorTool>(nameof(Tool));
-
-    public static readonly StyledProperty<ScRgb> StrokeColorProperty =
-        AvaloniaProperty.Register<SnipCanvas, ScRgb>(nameof(StrokeColor), new ScRgb(1, 0, 0));
-
-    public static readonly StyledProperty<double> StrokeSizeProperty =
-        AvaloniaProperty.Register<SnipCanvas, double>(nameof(StrokeSize), 4);
-
-    public static readonly StyledProperty<bool> ShowHdrProperty =
-        AvaloniaProperty.Register<SnipCanvas, bool>(nameof(ShowHdr), true);
-
-    public static readonly StyledProperty<ToneMapSettings> DefaultToneMapProperty =
-        AvaloniaProperty.Register<SnipCanvas, ToneMapSettings>(nameof(DefaultToneMap), ToneMapSettings.Default);
-
-    /// <summary>Shows HDR (true) or the SDR version (false) regardless of <see cref="ShowHdr"/>, as while tuning tone mapping.</summary>
-    public static readonly StyledProperty<bool?> ShowHdrOverrideProperty =
-        AvaloniaProperty.Register<SnipCanvas, bool?>(nameof(ShowHdrOverride));
-
-    /// <summary>A click samples the pixel under the pointer instead of using the tool.</summary>
-    public static readonly StyledProperty<bool> IsPickingColorProperty =
-        AvaloniaProperty.Register<SnipCanvas, bool>(nameof(IsPickingColor));
-
-    public static readonly StyledProperty<double> BottomInsetProperty =
-        AvaloniaProperty.Register<SnipCanvas, double>(nameof(BottomInset));
-
-    private const double ViewMargin = 24;
-    private const double HandleSize = 8;
-    private const double WheelZoomStep = 1.25;
-    private const double DipsPerWheelDelta = 50;
-    private const double ZoomAnimationMs = 160;
-    private static readonly IBrush CropDim = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0));
-    private static readonly IPen CropPen = new Pen(Brushes.White, 1.5);
-    private static readonly Cursor GrabCursor = new(StandardCursorType.SizeAll);
-    private static readonly Cursor CrossCursor = new(StandardCursorType.Cross);
-    private static readonly Cursor EraserCursor = new(StandardCursorType.Hand);
-
-    private readonly Glide zoomGlide;
-    private double? zoomTarget;
-    private bool zoomTargetIsFit;
-    private Vector2 zoomAnchor;
-    private Point zoomFocus;
-    private double zoom = 1;
-    private bool fit = true;
-    private Vector offset;
-    private IPointer? panPointer;
-    private Point? panStart;
-    private Vector panOrigin;
-    private IPointer? tapPointer;
-    private Rect tapBounds;
-    private bool previousWasTap;
-    private bool doubleTapPending;
-    private Point? pointerPosition;
-    private List<Vector2>? activePoints;
+    private EditorDocument? document;
+    private EditorTool tool;
+    private bool showHdr = true, picking, fit = true;
+    private bool? hdrOverride;
+    private double zoom = 1, bottomInset;
+    private ToneMapSettings toneMap = ToneMapSettings.Default;
+    private Vector2 offset, panOrigin, start;
+    private uint? activePointer;
+    private bool panning;
+    private List<Vector2>? points;
     private HashSet<AnnotationStroke>? erased;
     private PixelRect? crop;
     private CropDrag cropDrag;
-    private Point cropStart;
+    private Vector2 cropStart;
     private PixelRect cropOrigin;
-    private SurfaceColorInfo surface;
-    private SurfaceColorInfo pendingSurface;
-    private int surfacePosted;
-    private PixelHover? hover;
-
-    static SnipCanvas()
-    {
-        AffectsRender<SnipCanvas>(ToolProperty, ShowHdrProperty, DefaultToneMapProperty, ShowHdrOverrideProperty);
-        FocusableProperty.OverrideDefaultValue<SnipCanvas>(true);
-        ClipToBoundsProperty.OverrideDefaultValue<SnipCanvas>(true);
-    }
+    private readonly DispatcherTimer zoomTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private readonly Stopwatch zoomClock = new();
+    private double fromZoom, targetZoom;
+    private Vector2 zoomImageAnchor, zoomViewAnchor;
+    private const float HandleSize = 8;
+    public event EventHandler? ViewChanged;
+    public event EventHandler? CropChanged;
+    public event EventHandler<PixelHover?>? HoverChanged;
+    public event EventHandler<PixelHover>? PixelPicked;
 
     public SnipCanvas()
     {
-        zoomGlide = new Glide(this, ApplyAnimatedZoom) { Completed = () => zoomTarget = null };
-        DoubleTapped += OnDoubleTapped;
-        PointerTouchPadGestureMagnify += OnTouchpadMagnify;
-        AttachedToVisualTree += (_, e) =>
+        PointerPressed += Pressed;
+        PointerMoved += Moved;
+        PointerReleased += Released;
+        PointerCanceled += (_, _) => CancelInput();
+        PointerCaptureLost += (_, e) => { if (activePointer == e.Pointer.PointerId) CancelInput(); };
+        PointerExited += (_, _) => SetHover(null);
+        PointerWheelChanged += Wheel;
+        DoubleTapped += (_, e) => { if (tool == EditorTool.Select && !picking) { AnimateZoom(IsFit ? 1 : FitZoom(), V(e.GetPosition(this))); e.Handled = true; } };
+        SizeChanged += (_, _) => { ClampOffset(); ChangedView(); };
+        Unloaded += (_, _) => { zoomTimer.Stop(); CancelInput(); };
+        SurfaceChanged += (_, _) => InvalidateVisual();
+        zoomTimer.Tick += (_, _) =>
         {
-            if (e.RootVisual is TopLevel root)
-                root.ScalingChanged += OnViewportChanged;
+            double t = Math.Clamp(zoomClock.Elapsed.TotalMilliseconds / 160, 0, 1);
+            ApplyZoom(fromZoom + (targetZoom - fromZoom) * (1 - Math.Pow(1 - t, 3)), zoomImageAnchor, zoomViewAnchor);
+            if (t >= 1) zoomTimer.Stop();
         };
-        DetachedFromVisualTree += (_, e) =>
+        ManipulationMode = ManipulationModes.Scale | ManipulationModes.TranslateX | ManipulationModes.TranslateY;
+        ManipulationDelta += (_, e) =>
         {
-            if (e.RootVisual is TopLevel root)
-                root.ScalingChanged -= OnViewportChanged;
-            StopZoomAnimation();
-        };
-        EffectiveViewportChanged += (_, e) =>
-        {
-            Rect visible = e.EffectiveViewport.Intersect(new Rect(Bounds.Size));
-            if (!IsEffectivelyVisible || visible.Width <= 0 || visible.Height <= 0)
-                StopZoomAnimation();
+            if (tool != EditorTool.Select || picking || document is null) return;
+            zoomTimer.Stop();
+            ApplyZoom(Zoom * e.Delta.Scale, ToImage(V(e.Position)), V(e.Position));
+            offset += V(e.Delta.Translation);
+            ClampOffset(); ChangedView(); e.Handled = true;
         };
     }
-
-    public event EventHandler? ViewChanged;
-
-    public event EventHandler? SurfaceChanged;
-
-    public event EventHandler? CropChanged;
-
-    /// <summary>Raised when the pointer moves onto another image pixel, or off the image (null).</summary>
-    public event EventHandler<PixelHover?>? HoverChanged;
-
-    /// <summary>Raised with the image pixel clicked while picking a color.</summary>
-    public event EventHandler<PixelHover>? PixelPicked;
-
     public EditorDocument? Document
     {
-        get => GetValue(DocumentProperty);
-        set => SetValue(DocumentProperty, value);
+        get => document;
+        set
+        {
+            if (ReferenceEquals(document, value)) return;
+            zoomTimer.Stop(); CancelInput();
+            if (document is not null) { document.Changed -= DocumentChanged; document.RenditionChanged -= RenditionChanged; }
+            document = value;
+            if (document is not null) { document.Changed += DocumentChanged; document.RenditionChanged += RenditionChanged; }
+            fit = true; offset = default; crop = null; SetHover(null); ChangedView();
+            if (value is null) ReleaseBuffers();
+        }
     }
-
     public EditorTool Tool
     {
-        get => GetValue(ToolProperty);
-        set => SetValue(ToolProperty, value);
+        get => tool;
+        set
+        {
+            if (tool == value) return;
+            CancelInput(); tool = value;
+            ManipulationMode = value == EditorTool.Select ? ManipulationModes.Scale | ManipulationModes.TranslateX | ManipulationModes.TranslateY : ManipulationModes.None;
+            if (value == EditorTool.Crop) ResetCrop();
+            else { crop = null; CropChanged?.Invoke(this, EventArgs.Empty); }
+            SetCursor(); InvalidateVisual();
+        }
     }
-
-    public ScRgb StrokeColor
-    {
-        get => GetValue(StrokeColorProperty);
-        set => SetValue(StrokeColorProperty, value);
-    }
-
-    /// <summary>Stroke width in device-independent pixels at the current zoom.</summary>
-    public double StrokeSize
-    {
-        get => GetValue(StrokeSizeProperty);
-        set => SetValue(StrokeSizeProperty, value);
-    }
-
-    public bool ShowHdr
-    {
-        get => GetValue(ShowHdrProperty);
-        set => SetValue(ShowHdrProperty, value);
-    }
-
-    /// <summary>Tone mapping of the SDR version for snips that were not tuned themselves.</summary>
-    public ToneMapSettings DefaultToneMap
-    {
-        get => GetValue(DefaultToneMapProperty);
-        set => SetValue(DefaultToneMapProperty, value);
-    }
-
-    public bool? ShowHdrOverride
-    {
-        get => GetValue(ShowHdrOverrideProperty);
-        set => SetValue(ShowHdrOverrideProperty, value);
-    }
-
-    public bool IsPickingColor
-    {
-        get => GetValue(IsPickingColorProperty);
-        set => SetValue(IsPickingColorProperty, value);
-    }
-
-    /// <summary>Space occupied by the dock, excluded from fit and pan limits but not from drawing.</summary>
-    public double BottomInset
-    {
-        get => GetValue(BottomInsetProperty);
-        set => SetValue(BottomInsetProperty, value);
-    }
-
-    /// <summary>The pixel under the pointer, if the pointer is over the image.</summary>
-    public PixelHover? Hover => hover;
-
+    public ScRgb StrokeColor { get; set; } = new(1, 0, 0);
+    public double StrokeSize { get; set; } = 4;
+    public bool ShowHdr { get => showHdr; set { showHdr = value; InvalidateVisual(); } }
+    public bool? ShowHdrOverride { get => hdrOverride; set { hdrOverride = value; InvalidateVisual(); } }
+    public ToneMapSettings DefaultToneMap { get => toneMap; set { toneMap = value; InvalidateVisual(); } }
+    public bool IsPickingColor { get => picking; set { picking = value; SetCursor(); } }
+    public double BottomInset { get => bottomInset; set { if (Math.Abs(bottomInset - value) < 0.1) return; bottomInset = value; ClampOffset(); ChangedView(); } }
     public double Zoom => fit ? FitZoom() : zoom;
-
     public bool IsFit => fit;
-
-    /// <summary>The color capabilities of the surface the snip was last drawn on.</summary>
-    public SurfaceColorInfo Surface => surface;
-
-    /// <summary>The pending crop rectangle in image pixels, while the crop tool is active.</summary>
     public PixelRect? CropRegion => crop;
-
-    public void ZoomBy(double factor) => AnimateZoom((zoomTarget ?? Zoom) * factor, Center);
-
+    public PixelHover? Hover { get; private set; }
+    public void ZoomBy(double factor) => AnimateZoom((zoomTimer.IsEnabled ? targetZoom : Zoom) * factor, Center);
     public void ZoomToFit() => AnimateZoom(FitZoom(), Center);
-
     public void ZoomToActualSize() => AnimateZoom(1, Center);
-
-    public void ResetCrop()
+    public void ResetCrop() { crop = document is null ? null : new PixelRect(0, 0, document.Width, document.Height); CropChanged?.Invoke(this, EventArgs.Empty); InvalidateVisual(); }
+    private void DocumentChanged(object? sender, EventArgs e) { if (tool == EditorTool.Crop) ResetCrop(); ClampOffset(); ChangedView(); }
+    private void RenditionChanged(object? sender, EventArgs e) => InvalidateVisual();
+    private void ChangedView() { SetCursor(); InvalidateVisual(); ViewChanged?.Invoke(this, EventArgs.Empty); }
+    private void SetCursor() => ProtectedCursor = InputSystemCursor.Create(picking || tool is EditorTool.Pen or EditorTool.Highlighter or EditorTool.Crop ? InputSystemCursorShape.Cross : tool == EditorTool.Eraser ? InputSystemCursorShape.Hand : CanPan ? InputSystemCursorShape.SizeAll : InputSystemCursorShape.Arrow);
+    protected override void Draw(SKCanvas canvas)
     {
-        crop = Document is { } document ? new PixelRect(0, 0, document.Width, document.Height) : null;
-        CropChanged?.Invoke(this, EventArgs.Empty);
-        InvalidateVisual();
-    }
-
-    /// <summary>The image is drawn by a custom operation, so the whole control claims pointer input.</summary>
-    public bool HitTest(Point point) => new Rect(Bounds.Size).Contains(point);
-
-    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-    {
-        base.OnPropertyChanged(change);
-        if (change.Property == DocumentProperty)
-        {
-            StopZoomAnimation();
-            CancelTap();
-            panPointer?.Capture(null);
-            panPointer = null;
-            panStart = null;
-            activePoints = null;
-            erased = null;
-            cropDrag = default;
-            if (change.OldValue is EditorDocument old)
-            {
-                old.Changed -= OnDocumentChanged;
-                old.RenditionChanged -= OnRenditionChanged;
-            }
-
-            if (change.NewValue is EditorDocument document)
-            {
-                document.Changed += OnDocumentChanged;
-                document.RenditionChanged += OnRenditionChanged;
-            }
-            fit = true;
-            offset = default;
-            crop = null;
-            SetHover(null);
-            OnViewChanged();
-        }
-        else if (change.Property == BottomInsetProperty || change.Property == BoundsProperty)
-        {
-            OnViewportChanged(this, EventArgs.Empty);
-        }
-        else if (change.Property == ToolProperty || change.Property == IsPickingColorProperty)
-        {
-            CancelTap();
-            if (change.Property == ToolProperty && Tool == EditorTool.Crop)
-                ResetCrop();
-            else if (change.Property == ToolProperty && crop is not null)
-            {
-                crop = null;
-                CropChanged?.Invoke(this, EventArgs.Empty);
-            }
-
-            UpdateCursor();
-        }
-    }
-
-    public override void Render(DrawingContext context)
-    {
-        if (Document is not { } document)
-            return;
-
-        Rect imageRect = ImageRect();
-
-        // Snips without HDR content always show as captured where the surface allows, which keeps
-        // wide-gamut colors; the HDR switch only concerns snips with highlights to tone map.
-        bool showHdr = surface.ExtendedRange && (!document.Current.Statistics.HasHdr || (ShowHdrOverride ?? ShowHdr));
-        SharedImage image = showHdr
-            ? document.GetHdrImage((float)surface.Headroom)
-            : document.GetSdrImage(DefaultToneMap);
+        using var srgb = SKColorSpace.CreateSrgb();
+        using var background = new SKPaint();
+        float shade = ActualTheme == ElementTheme.Dark ? 0.07f : 0.91f;
+        background.SetColor(new SKColorF(shade, shade, shade, 1), srgb);
+        canvas.DrawRect(0, 0, (float)ActualWidth, (float)ActualHeight, background);
+        if (document is null) return;
+        bool hdr = Surface.ExtendedRange && (!document.Current.Statistics.HasHdr || (hdrOverride ?? showHdr));
+        var image = hdr ? document.GetHdrImage((float)Surface.Headroom) : document.GetSdrImage(toneMap);
         IReadOnlyList<AnnotationStroke> strokes = document.Current.Strokes;
-        if (erased is { Count: > 0 })
-            strokes = strokes.Where(s => !erased.Contains(s)).ToArray();
-        if (activePoints is { Count: > 0 })
-            strokes = [.. strokes, CreateStroke(activePoints)];
-
-        double physicalZoom = Zoom;
-        context.Custom(new SnipDrawOperation(new Rect(Bounds.Size), image, imageRect, strokes, physicalZoom < 1.5, ObserveSurface)
-        {
-            Checkerboard = document.Current.Statistics.VisiblePixels < (long)document.Width * document.Height,
-        });
-
-        if (Tool == EditorTool.Crop && crop is { } region)
-            DrawCrop(context, imageRect, region);
+        if (erased?.Count > 0) strokes = strokes.Where(s => !erased.Contains(s)).ToArray();
+        if (points?.Count > 0) strokes = [.. strokes, CreateStroke(points)];
+        var rect = ImageRect();
+        SnipDrawing.Draw(canvas, image, rect, strokes, Zoom < 1.5, Surface.ReferenceWhiteScale, document.Current.Statistics.VisiblePixels < (long)document.Width * document.Height);
+        if (tool == EditorTool.Crop && crop is { } region) DrawCrop(canvas, rect, region);
     }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    private void Pressed(object sender, PointerRoutedEventArgs e)
     {
-        base.OnPointerPressed(e);
-        if (Document is not { } document)
-            return;
-        if (panPointer is not null)
-            return;
-        StopZoomAnimation();
-        Focus();
-        PointerPoint point = e.GetCurrentPoint(this);
-        pointerPosition = point.Position;
-        bool left = point.Properties.IsLeftButtonPressed;
-        doubleTapPending = false;
-        if (left && Tool == EditorTool.Select && !IsPickingColor)
+        if (document is null || activePointer is not null) return;
+        var p = e.GetCurrentPoint(this);
+        if (e.Pointer.PointerDeviceType == PointerDeviceType.Touch && tool == EditorTool.Select && !picking) return;
+        if (!p.Properties.IsLeftButtonPressed && !p.Properties.IsMiddleButtonPressed) return;
+        zoomTimer.Stop();
+        var position = V(p.Position);
+        if (picking)
         {
-            tapPointer = e.Pointer;
-            Size tapSize = Application.Current?.PlatformSettings?.GetTapSize(e.Pointer.Type) ?? new Size(4, 4);
-            tapBounds = new Rect(point.Position, default(Size)).Inflate(new Thickness(tapSize.Width, tapSize.Height));
+            if (PixelAt(position) is { } pixel) PixelPicked?.Invoke(this, pixel);
+            e.Handled = true; return;
         }
-        else
+        activePointer = e.Pointer.PointerId; start = position;
+        if (p.Properties.IsMiddleButtonPressed || tool == EditorTool.Select) { panning = true; panOrigin = offset; }
+        else if (tool is EditorTool.Pen or EditorTool.Highlighter) points = [ToImage(position)];
+        else if (tool == EditorTool.Eraser) { erased = []; EraseAt(position); }
+        else if (tool == EditorTool.Crop && crop is { } region)
         {
-            CancelTap();
-        }
-
-        if (left && IsPickingColor)
-        {
-            if (PixelAt(point.Position) is { } picked)
-                PixelPicked?.Invoke(this, picked);
-            e.Handled = true;
-            return;
-        }
-
-        if (point.Properties.IsMiddleButtonPressed || (left && Tool == EditorTool.Select))
-        {
-            if (!CanPan)
-                return;
-            panPointer = e.Pointer;
-            panStart = point.Position;
-            panOrigin = offset;
-            SetHover(null);
-            UpdateCursor();
-        }
-        else if (left && Tool is EditorTool.Pen or EditorTool.Highlighter)
-        {
-            activePoints = [ToImage(point.Position)];
-        }
-        else if (left && Tool == EditorTool.Eraser)
-        {
-            erased = [];
-            EraseAt(document, point.Position);
-        }
-        else if (left && Tool == EditorTool.Crop && crop is { } region)
-        {
-            cropDrag = HitCrop(region, point.Position);
-            cropStart = point.Position;
-            cropOrigin = region;
+            cropDrag = HitCrop(region, position); cropStart = position; cropOrigin = region;
             if (cropDrag == CropDrag.None)
             {
                 cropDrag = CropDrag.New;
-                Vector2 start = ToImage(point.Position);
-                cropOrigin = new PixelRect((int)Math.Round(start.X), (int)Math.Round(start.Y), 0, 0);
+                var imagePoint = ToImage(position);
+                cropOrigin = new PixelRect((int)Math.Round(imagePoint.X), (int)Math.Round(imagePoint.Y), 0, 0);
             }
         }
-        else
-        {
-            return;
-        }
-
-        e.Pointer.Capture(this);
-        e.Handled = Tool != EditorTool.Select || point.Properties.IsMiddleButtonPressed;
-        InvalidateVisual();
+        CapturePointer(e.Pointer); e.Handled = true; InvalidateVisual();
     }
-
-    protected override void OnPointerMoved(PointerEventArgs e)
+    private void Moved(object sender, PointerRoutedEventArgs e)
     {
-        base.OnPointerMoved(e);
-        Point position = e.GetPosition(this);
-        pointerPosition = position;
-        if (ReferenceEquals(tapPointer, e.Pointer) && !tapBounds.ContainsExclusive(position))
-            CancelTap();
-        if (panStart is null)
-            SetHover(PixelAt(position));
-        if (panStart is { } start)
+        var position = V(e.GetCurrentPoint(this).Position);
+        SetHover(PixelAt(position));
+        if (activePointer != e.Pointer.PointerId) return;
+        if (panning) { offset = panOrigin + position - start; ClampOffset(); ChangedView(); }
+        else if (points is not null)
         {
-            if (!ReferenceEquals(panPointer, e.Pointer))
-                return;
-            offset = panOrigin + (position - start);
-            ClampOffset();
-            OnViewChanged();
-            e.Handled = true;
-        }
-        else if (activePoints is not null)
-        {
-            Vector2 next = ToImage(position);
-            if (Vector2.Distance(next, activePoints[^1]) * ImageScale() >= 1.5)
+            // Preserve pen samples delivered between UI frames.
+            foreach (var p in e.GetIntermediatePoints(this).Reverse())
             {
-                activePoints.Add(next);
-                InvalidateVisual();
+                var point = ToImage(V(p.Position));
+                if (Vector2.Distance(point, points[^1]) * ImageScale > 0.5f) points.Add(point);
             }
-        }
-        else if (erased is not null && Document is { } document)
-        {
-            EraseAt(document, position);
-        }
-        else if (cropDrag != CropDrag.None && Document is { } cropped)
-        {
-            crop = DragCrop(cropped, position);
-            CropChanged?.Invoke(this, EventArgs.Empty);
             InvalidateVisual();
         }
-        else if (!IsPickingColor && Tool == EditorTool.Crop && crop is { } region)
-        {
-            Cursor = HitCrop(region, position) switch
-            {
-                CropDrag.Left or CropDrag.Right => new Cursor(StandardCursorType.SizeWestEast),
-                CropDrag.Top or CropDrag.Bottom => new Cursor(StandardCursorType.SizeNorthSouth),
-                CropDrag.TopLeft or CropDrag.BottomRight => new Cursor(StandardCursorType.TopLeftCorner),
-                CropDrag.TopRight or CropDrag.BottomLeft => new Cursor(StandardCursorType.TopRightCorner),
-                CropDrag.Move => new Cursor(StandardCursorType.SizeAll),
-                _ => new Cursor(StandardCursorType.Cross),
-            };
-        }
+        else if (erased is not null) EraseAt(position);
+        else if (cropDrag != CropDrag.None && document is not null) { crop = DragCrop(document, position); CropChanged?.Invoke(this, EventArgs.Empty); InvalidateVisual(); }
+        e.Handled = true;
     }
-
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    private void Released(object sender, PointerRoutedEventArgs e)
     {
-        base.OnPointerReleased(e);
-        if (panPointer is not null && !ReferenceEquals(panPointer, e.Pointer))
-            return;
-        bool tapped = ReferenceEquals(tapPointer, e.Pointer) &&
-            tapBounds.ContainsExclusive(e.GetPosition(this)) && Tool == EditorTool.Select && !IsPickingColor;
-        bool toggleZoom = tapped && doubleTapPending;
-        CancelTap();
-        EditorDocument? document = Document;
-        if (panStart is not null)
+        if (activePointer != e.Pointer.PointerId) return;
+        var stroke = points; var removed = erased;
+        points = null; erased = null; panning = false; activePointer = null; cropDrag = CropDrag.None;
+        ReleasePointerCapture(e.Pointer);
+        if (stroke is not null) document?.AddStroke(CreateStroke(stroke));
+        else if (removed is not null) document?.Erase(removed);
+        if (crop is { Width: < 2 } or { Height: < 2 }) ResetCrop();
+        e.Handled = true; InvalidateVisual();
+    }
+    private void CancelInput() { activePointer = null; panning = false; points = null; erased = null; cropDrag = CropDrag.None; ReleasePointerCaptures(); InvalidateVisual(); }
+    private void Wheel(object sender, PointerRoutedEventArgs e)
+    {
+        if (document is null) return;
+        var p = e.GetCurrentPoint(this);
+        if (p.Properties.IsHorizontalMouseWheel)
         {
-            panPointer = null;
-            panStart = null;
-            UpdateCursor();
-            SetHover(PixelAt(e.GetPosition(this)));
+            offset.X += p.Properties.MouseWheelDelta / 120f * 50; ClampOffset(); ChangedView();
         }
-        else if (activePoints is { } points && document is not null)
-        {
-            activePoints = null;
-            document.AddStroke(CreateStroke(points));
-        }
-        else if (erased is { } removed && document is not null)
-        {
-            erased = null;
-            document.Erase(removed);
-        }
-        else if (cropDrag != CropDrag.None)
-        {
-            cropDrag = CropDrag.None;
-            if (crop is { Width: < 2 } or { Height: < 2 })
-                ResetCrop();
-        }
-
-        e.Pointer.Capture(null);
-        previousWasTap = tapped && !toggleZoom;
-        if (toggleZoom)
-        {
-            AnimateZoom(IsFit ? 1 : FitZoom(), e.GetPosition(this));
-            e.Handled = true;
-        }
+        else AnimateZoom((zoomTimer.IsEnabled ? targetZoom : Zoom) * Math.Pow(1.25, p.Properties.MouseWheelDelta / 120.0), V(p.Position));
+        SetHover(PixelAt(V(p.Position))); e.Handled = true;
+    }
+    private void AnimateZoom(double value, Vector2 anchor)
+    {
+        if (document is null) return;
+        fromZoom = Zoom; targetZoom = Math.Clamp(value, FitZoom(), 32); zoomImageAnchor = ToImage(anchor); zoomViewAnchor = anchor;
+        zoomClock.Restart(); zoomTimer.Start();
+    }
+    private void ApplyZoom(double value, Vector2 imagePoint, Vector2 anchor)
+    {
+        if (document is null) return;
+        double minimum = FitZoom(); zoom = Math.Clamp(value, minimum, 32); fit = Math.Abs(zoom - minimum) < 1e-6;
+        float scale = ImageScale;
+        offset = anchor - imagePoint * scale + new Vector2(document.Width, document.Height) * scale / 2 - Center;
+        ClampOffset(); ChangedView();
+    }
+    private AnnotationStroke CreateStroke(IReadOnlyList<Vector2> vertices) => new(tool == EditorTool.Highlighter ? AnnotationTool.Highlighter : AnnotationTool.Pen, StrokeColor, MathF.Max(1, (float)StrokeSize / ImageScale), vertices.ToArray());
+    private void EraseAt(Vector2 position)
+    {
+        foreach (var stroke in document!.Current.Strokes)
+            if (stroke.HitTest(ToImage(position), 6 / ImageScale)) erased!.Add(stroke);
         InvalidateVisual();
     }
-
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    private void SetHover(PixelHover? value) { if (Hover == value) return; Hover = value; HoverChanged?.Invoke(this, value); }
+    private PixelHover? PixelAt(Vector2 view)
     {
-        base.OnPointerCaptureLost(e);
-        if (ReferenceEquals(tapPointer, e.Pointer))
-            CancelTap();
-        if (ReferenceEquals(panPointer, e.Pointer))
-        {
-            panPointer = null;
-            panStart = null;
-            UpdateCursor();
-            SetHover(null);
-        }
+        if (document is null) return null;
+        var point = ToImage(view); int x = (int)Math.Floor(point.X), y = (int)Math.Floor(point.Y);
+        return x >= 0 && y >= 0 && x < document.Width && y < document.Height ? new PixelHover(x, y, new Point(view.X, view.Y)) : null;
     }
-
-    protected override void OnPointerExited(PointerEventArgs e)
+    private static Vector2 V(Point point) => new((float)point.X, (float)point.Y);
+    private float ImageScale => (float)(Zoom / RasterScale);
+    private float ViewHeight => (float)Math.Max(1, ActualHeight - bottomInset);
+    private Vector2 Center => new((float)ActualWidth / 2, ViewHeight / 2);
+    private bool CanPan => document is not null && (document.Width * ImageScale > ActualWidth + 1 || document.Height * ImageScale > ViewHeight + 1);
+    private double FitZoom() => document is null || ActualWidth <= 0 ? 1 : Math.Min(1, Math.Max(0.001, Math.Min(Math.Max(1, ActualWidth - 48) * RasterScale / document.Width, Math.Max(1, ViewHeight - 48) * RasterScale / document.Height)));
+    private SKRect ImageRect()
     {
-        base.OnPointerExited(e);
-        pointerPosition = null;
-        SetHover(null);
+        if (document is null) return default;
+        var half = new Vector2(document.Width, document.Height) * ImageScale / 2; var center = Center + offset;
+        return new SKRect(center.X - half.X, center.Y - half.Y, center.X + half.X, center.Y + half.Y);
     }
-
-    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
-    {
-        base.OnPointerWheelChanged(e);
-        if (Document is null || e.Delta == default)
-            return;
-        pointerPosition = e.GetPosition(this);
-        if (e.IsTouchpad && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
-        {
-            StopZoomAnimation();
-            offset += e.Delta * DipsPerWheelDelta;
-            ClampOffset();
-            OnViewChanged();
-        }
-        else if (e.Delta.Y != 0)
-        {
-            if (e.IsTouchpad)
-                SetZoom(Zoom * Math.Pow(WheelZoomStep, e.Delta.Y), e.GetPosition(this));
-            else
-                AnimateZoom((zoomTarget ?? Zoom) * Math.Pow(WheelZoomStep, e.Delta.Y), e.GetPosition(this));
-        }
-        else
-            return;
-
-        SetHover(PixelAt(e.GetPosition(this)));
-        e.Handled = true;
-    }
-
-    private void OnDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        if (Document is null || Tool != EditorTool.Select || IsPickingColor)
-            return;
-
-        doubleTapPending = previousWasTap && tapPointer is not null;
-        e.Handled = true;
-    }
-
-    private void CancelTap()
-    {
-        tapPointer = null;
-        previousWasTap = false;
-        doubleTapPending = false;
-    }
-
-    private void OnTouchpadMagnify(object? sender, PointerDeltaEventArgs e)
-    {
-        if (Document is null || !double.IsFinite(e.Delta.Y) || e.Delta.Y <= -1)
-            return;
-
-        SetZoom(Zoom * (1 + e.Delta.Y), e.GetPosition(this));
-        e.Handled = true;
-    }
-
-    private void OnDocumentChanged(object? sender, EventArgs e)
-    {
-        if (Tool == EditorTool.Crop)
-            ResetCrop();
-        ClampOffset();
-        OnViewChanged();
-    }
-
-    private void OnRenditionChanged(object? sender, EventArgs e) => InvalidateVisual();
-
-    private void OnViewportChanged(object? sender, EventArgs e)
-    {
-        if (zoomTarget is not null && zoomTargetIsFit)
-            fit = true;
-        StopZoomAnimation();
-        ClampOffset();
-        OnViewChanged();
-    }
-
-    private void OnViewChanged()
-    {
-        UpdateCursor();
-        if (panStart is null && pointerPosition is { } position)
-            SetHover(PixelAt(position));
-        InvalidateVisual();
-        ViewChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void UpdateCursor()
-    {
-        Cursor = Tool switch
-        {
-            _ when panStart is not null => GrabCursor,
-            _ when IsPickingColor => CrossCursor,
-            EditorTool.Pen or EditorTool.Highlighter or EditorTool.Crop => CrossCursor,
-            EditorTool.Eraser => EraserCursor,
-            _ when CanPan => GrabCursor,
-            _ => Cursor.Default,
-        };
-    }
-
-    /// <summary>The image pixel at a canvas position, or null outside the image.</summary>
-    private PixelHover? PixelAt(Point position)
-    {
-        if (Document is not { } document)
-            return null;
-        Vector2 point = ToImage(position);
-        int x = (int)MathF.Floor(point.X), y = (int)MathF.Floor(point.Y);
-        return x >= 0 && y >= 0 && x < document.Width && y < document.Height ? new PixelHover(x, y, position) : null;
-    }
-
-    private void SetHover(PixelHover? next)
-    {
-        PixelHover? previous = hover;
-        hover = next;
-        if (previous is null != next is null || (next is { } n && previous is { } p && (n.X != p.X || n.Y != p.Y || n.Position != p.Position)))
-            HoverChanged?.Invoke(this, next);
-    }
-
-    // Called on the render thread; hands the surface description back to the UI thread when it changes.
-    private void ObserveSurface(SurfaceColorInfo info)
-    {
-        if (info == pendingSurface && Volatile.Read(ref surfacePosted) == 1)
-            return;
-        pendingSurface = info;
-        Volatile.Write(ref surfacePosted, 1);
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (surface == info)
-                return;
-            surface = info;
-            InvalidateVisual();
-            SurfaceChanged?.Invoke(this, EventArgs.Empty);
-        });
-    }
-
-    private AnnotationStroke CreateStroke(IReadOnlyList<Vector2> points)
-    {
-        bool highlighter = Tool == EditorTool.Highlighter;
-        float width = (float)(StrokeSize / ImageScale());
-        return new AnnotationStroke(highlighter ? AnnotationTool.Highlighter : AnnotationTool.Pen,
-            StrokeColor, MathF.Max(1, width), points.ToArray());
-    }
-
-    private void EraseAt(EditorDocument document, Point position)
-    {
-        Vector2 point = ToImage(position);
-        float tolerance = (float)(6 / ImageScale());
-        foreach (AnnotationStroke stroke in document.Current.Strokes)
-        {
-            if (!erased!.Contains(stroke) && stroke.HitTest(point, tolerance))
-            {
-                erased.Add(stroke);
-                InvalidateVisual();
-            }
-        }
-    }
-
-    /// <summary>Device-independent pixels per image pixel.</summary>
-    private double ImageScale() => Zoom / Math.Max(0.1, TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
-
-    private Rect Viewport => new(0, 0, Bounds.Width, Math.Max(0, Bounds.Height - Math.Max(0, BottomInset)));
-
-    private Point Center => Viewport.Center;
-
-    private bool CanPan => Document is { } document &&
-        (document.Width * ImageScale() - Viewport.Width > 1 || document.Height * ImageScale() - Viewport.Height > 1);
-
-    private double FitZoom()
-    {
-        Rect viewport = Viewport;
-        if (Document is not { } document || viewport.Width <= 0 || viewport.Height <= 0)
-            return 1;
-        double scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
-        double available = Math.Min(
-            Math.Max(1, viewport.Width - 2 * ViewMargin) * scaling / document.Width,
-            Math.Max(1, viewport.Height - 2 * ViewMargin) * scaling / document.Height);
-        return Math.Min(1, available);
-    }
-
-    private Rect ImageRect()
-    {
-        if (Document is not { } document)
-            return default;
-        double scale = ImageScale();
-        var size = new Size(document.Width * scale, document.Height * scale);
-        Point center = Center + offset;
-        return new Rect(center.X - size.Width / 2, center.Y - size.Height / 2, size.Width, size.Height);
-    }
-
-    private Vector2 ToImage(Point point)
-    {
-        Rect rect = ImageRect();
-        double scale = ImageScale();
-        return new Vector2((float)((point.X - rect.X) / scale), (float)((point.Y - rect.Y) / scale));
-    }
-
-    private Point ToView(double x, double y)
-    {
-        Rect rect = ImageRect();
-        double scale = ImageScale();
-        return new Point(rect.X + x * scale, rect.Y + y * scale);
-    }
-
-    private void SetZoom(double value, Point anchor)
-    {
-        StopZoomAnimation();
-        if (Document is not null)
-            ApplyZoom(value, ToImage(anchor), anchor);
-    }
-
-    private void AnimateZoom(double value, Point anchor)
-    {
-        if (Document is null)
-            return;
-        value = Math.Clamp(value, FitZoom(), 32);
-        if (zoomTarget is { } target && Math.Abs(value - target) < 1e-6)
-            return;
-
-        StopZoomAnimation();
-        if (TopLevel.GetTopLevel(this) is null || !IsEffectivelyVisible || Opacity <= 0)
-        {
-            SetZoom(value, anchor);
-            return;
-        }
-        if (Math.Abs(value - Zoom) < 1e-6)
-        {
-            ApplyZoom(value, ToImage(anchor), anchor);
-            return;
-        }
-
-        zoomTarget = value;
-        zoomTargetIsFit = Math.Abs(value - FitZoom()) < 1e-6;
-        zoomAnchor = ToImage(anchor);
-        zoomFocus = anchor;
-        zoomGlide.Start(Zoom, value, ZoomAnimationMs);
-        OnViewChanged();
-    }
-
-    private void ApplyAnimatedZoom(double value)
-    {
-        if (Document is null || !IsEffectivelyVisible || Opacity <= 0)
-        {
-            StopZoomAnimation();
-            return;
-        }
-
-        ApplyZoom(value, zoomAnchor, zoomFocus);
-    }
-
-    private void StopZoomAnimation()
-    {
-        zoomGlide.Stop();
-        zoomTarget = null;
-    }
-
-    private void ApplyZoom(double value, Vector2 imagePoint, Point anchor)
-    {
-        if (Document is null)
-            return;
-        double minimum = FitZoom();
-        value = Math.Clamp(value, minimum, 32);
-        fit = Math.Abs(value - minimum) < 1e-6;
-        zoom = fit ? minimum : value;
-        double scale = ImageScale();
-        var size = new Size(Document.Width * scale, Document.Height * scale);
-        var topLeft = new Point(anchor.X - imagePoint.X * scale, anchor.Y - imagePoint.Y * scale);
-        offset = new Vector(topLeft.X + size.Width / 2 - Center.X, topLeft.Y + size.Height / 2 - Center.Y);
-        ClampOffset();
-        OnViewChanged();
-    }
-
+    private Vector2 ToImage(Vector2 point) { var rect = ImageRect(); return (point - new Vector2(rect.Left, rect.Top)) / ImageScale; }
+    private Vector2 ToView(double x, double y) { var rect = ImageRect(); return new Vector2(rect.Left + (float)x * ImageScale, rect.Top + (float)y * ImageScale); }
     private void ClampOffset()
     {
-        if (fit)
-        {
-            offset = default;
-            return;
-        }
-        if (Document is not { } document)
-            return;
-        double scale = ImageScale();
-        double width = document.Width * scale, height = document.Height * scale;
-        double limitX = Math.Max(0, (width - Viewport.Width) / 2);
-        double limitY = Math.Max(0, (height - Viewport.Height) / 2);
-        offset = new Vector(
-            Math.Clamp(offset.X, -limitX, limitX),
-            Math.Clamp(offset.Y, -limitY, limitY));
+        if (fit) { offset = default; return; }
+        if (document is null) return;
+        float x = Math.Max(0, (document.Width * ImageScale - (float)ActualWidth) / 2), y = Math.Max(0, (document.Height * ImageScale - ViewHeight) / 2);
+        offset = Vector2.Clamp(offset, new Vector2(-x, -y), new Vector2(x, y));
     }
-
-    private enum CropDrag
+    private enum CropDrag { None, New, Move, Left, Top, Right, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
+    private CropDrag HitCrop(PixelRect region, Vector2 point)
     {
-        None,
-        New,
-        Move,
-        Left,
-        Top,
-        Right,
-        Bottom,
-        TopLeft,
-        TopRight,
-        BottomLeft,
-        BottomRight,
-    }
-
-    private CropDrag HitCrop(PixelRect region, Point point)
-    {
-        Point topLeft = ToView(region.X, region.Y);
-        Point bottomRight = ToView(region.Right, region.Bottom);
-        bool nearLeft = Math.Abs(point.X - topLeft.X) <= HandleSize;
-        bool nearRight = Math.Abs(point.X - bottomRight.X) <= HandleSize;
-        bool nearTop = Math.Abs(point.Y - topLeft.Y) <= HandleSize;
-        bool nearBottom = Math.Abs(point.Y - bottomRight.Y) <= HandleSize;
-        bool withinX = point.X >= topLeft.X - HandleSize && point.X <= bottomRight.X + HandleSize;
-        bool withinY = point.Y >= topLeft.Y - HandleSize && point.Y <= bottomRight.Y + HandleSize;
-        if (!withinX || !withinY)
-            return CropDrag.None;
-        return (nearLeft, nearTop, nearRight, nearBottom) switch
+        var a = ToView(region.X, region.Y); var b = ToView(region.Right, region.Bottom);
+        if (point.X < a.X - HandleSize || point.X > b.X + HandleSize || point.Y < a.Y - HandleSize || point.Y > b.Y + HandleSize) return CropDrag.None;
+        bool l = Math.Abs(point.X - a.X) <= HandleSize, r = Math.Abs(point.X - b.X) <= HandleSize, t = Math.Abs(point.Y - a.Y) <= HandleSize, d = Math.Abs(point.Y - b.Y) <= HandleSize;
+        return (l,t,r,d) switch
         {
-            (true, true, _, _) => CropDrag.TopLeft,
-            (_, true, true, _) => CropDrag.TopRight,
-            (true, _, _, true) => CropDrag.BottomLeft,
-            (_, _, true, true) => CropDrag.BottomRight,
-            (true, _, _, _) => CropDrag.Left,
-            (_, true, _, _) => CropDrag.Top,
-            (_, _, true, _) => CropDrag.Right,
-            (_, _, _, true) => CropDrag.Bottom,
-            // A frame around the whole image has nowhere to move, so dragging inside it draws a new one.
-            _ when Document is { } document && region == new PixelRect(0, 0, document.Width, document.Height) => CropDrag.None,
-            _ => CropDrag.Move,
+            (true,true,_,_) => CropDrag.TopLeft, (_,true,true,_) => CropDrag.TopRight,
+            (true,_,_,true) => CropDrag.BottomLeft, (_,_,true,true) => CropDrag.BottomRight,
+            (true,_,_,_) => CropDrag.Left, (_,true,_,_) => CropDrag.Top, (_,_,true,_) => CropDrag.Right, (_,_,_,true) => CropDrag.Bottom,
+            _ when document is not null && region == new PixelRect(0,0,document.Width,document.Height) => CropDrag.None, _ => CropDrag.Move,
         };
     }
-
-    private PixelRect DragCrop(EditorDocument document, Point position)
+    private PixelRect DragCrop(EditorDocument doc, Vector2 position)
     {
-        double scale = ImageScale();
-        int dx = (int)Math.Round((position.X - cropStart.X) / scale);
-        int dy = (int)Math.Round((position.Y - cropStart.Y) / scale);
-        int left = cropOrigin.X, top = cropOrigin.Y, right = cropOrigin.Right, bottom = cropOrigin.Bottom;
-        switch (cropDrag)
+        int dx = (int)Math.Round((position.X - cropStart.X) / ImageScale), dy = (int)Math.Round((position.Y - cropStart.Y) / ImageScale);
+        int l = cropOrigin.X, t = cropOrigin.Y, r = cropOrigin.Right, b = cropOrigin.Bottom;
+        if (cropDrag == CropDrag.Move) return cropOrigin.Offset(Math.Clamp(dx, -l, doc.Width - r), Math.Clamp(dy, -t, doc.Height - b));
+        if (cropDrag == CropDrag.New) { r = l + dx; b = t + dy; }
+        else
         {
-            case CropDrag.Move:
-                dx = Math.Clamp(dx, -left, document.Width - right);
-                dy = Math.Clamp(dy, -top, document.Height - bottom);
-                return cropOrigin.Offset(dx, dy);
-            case CropDrag.New:
-                right = left + dx;
-                bottom = top + dy;
-                break;
-            default:
-                if (cropDrag is CropDrag.Left or CropDrag.TopLeft or CropDrag.BottomLeft)
-                    left += dx;
-                if (cropDrag is CropDrag.Right or CropDrag.TopRight or CropDrag.BottomRight)
-                    right += dx;
-                if (cropDrag is CropDrag.Top or CropDrag.TopLeft or CropDrag.TopRight)
-                    top += dy;
-                if (cropDrag is CropDrag.Bottom or CropDrag.BottomLeft or CropDrag.BottomRight)
-                    bottom += dy;
-                break;
+            if (cropDrag is CropDrag.Left or CropDrag.TopLeft or CropDrag.BottomLeft) l += dx;
+            if (cropDrag is CropDrag.Right or CropDrag.TopRight or CropDrag.BottomRight) r += dx;
+            if (cropDrag is CropDrag.Top or CropDrag.TopLeft or CropDrag.TopRight) t += dy;
+            if (cropDrag is CropDrag.Bottom or CropDrag.BottomLeft or CropDrag.BottomRight) b += dy;
         }
-
-        return PixelRect.FromEdges(Math.Min(left, right), Math.Min(top, bottom), Math.Max(left, right), Math.Max(top, bottom))
-            .Intersect(new PixelRect(0, 0, document.Width, document.Height));
+        return PixelRect.FromEdges(Math.Min(l,r),Math.Min(t,b),Math.Max(l,r),Math.Max(t,b)).Intersect(new PixelRect(0,0,doc.Width,doc.Height));
     }
-
-    private void DrawCrop(DrawingContext context, Rect imageRect, PixelRect region)
+    private void DrawCrop(SKCanvas canvas, SKRect image, PixelRect region)
     {
-        var rect = new Rect(ToView(region.X, region.Y), ToView(region.Right, region.Bottom));
-        var dimmed = new GeometryGroup { FillRule = FillRule.EvenOdd };
-        dimmed.Children.Add(new RectangleGeometry(imageRect));
-        dimmed.Children.Add(new RectangleGeometry(rect));
-        context.DrawGeometry(CropDim, null, dimmed);
-        context.DrawRectangle(null, CropPen, rect);
-        foreach (Point handle in new[]
-        {
-            rect.TopLeft, rect.TopRight, rect.BottomLeft, rect.BottomRight,
-            new Point(rect.Center.X, rect.Top), new Point(rect.Center.X, rect.Bottom),
-            new Point(rect.Left, rect.Center.Y), new Point(rect.Right, rect.Center.Y),
-        })
-        {
-            context.DrawRectangle(Brushes.White, new Pen(Brushes.Black, 1),
-                new Rect(handle.X - HandleSize / 2, handle.Y - HandleSize / 2, HandleSize, HandleSize));
-        }
+        var a = ToView(region.X,region.Y); var b = ToView(region.Right,region.Bottom); var rect = new SKRect(a.X,a.Y,b.X,b.Y);
+        canvas.Save(); canvas.ClipRect(image); canvas.ClipRect(rect, SKClipOperation.Difference);
+        using (var dim = new SKPaint { Color = new SKColor(0,0,0,128) }) canvas.DrawRect(image,dim);
+        canvas.Restore();
+        using var line = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f };
+        canvas.DrawRect(rect,line);
+        using var handle = new SKPaint { Color = SKColors.White };
+        foreach (var p in new[] { a,b,new Vector2(a.X,b.Y),new Vector2(b.X,a.Y),new Vector2((a.X+b.X)/2,a.Y),new Vector2((a.X+b.X)/2,b.Y),new Vector2(a.X,(a.Y+b.Y)/2),new Vector2(b.X,(a.Y+b.Y)/2) })
+            canvas.DrawRect(p.X-4,p.Y-4,8,8,handle);
     }
+    public override void Dispose() { zoomTimer.Stop(); Document = null; base.Dispose(); }
 }

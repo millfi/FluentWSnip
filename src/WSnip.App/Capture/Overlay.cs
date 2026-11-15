@@ -1,25 +1,25 @@
-using Avalonia;
-using Avalonia.Automation;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Layout;
-using Avalonia.Media;
-using Avalonia.Threading;
+using Microsoft.UI.Input;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Windows.System;
+using Windows.Foundation;
+using Windows.Graphics;
+using SkiaSharp;
 using WSnip.App.Rendering;
+using WSnip.App.Services;
 using WSnip.Core.Capture;
 using WSnip.Core.Imaging;
 using WSnip.Core.Strings;
-using PixelRect = WSnip.Core.Imaging.PixelRect;
-using ShapePath = Avalonia.Controls.Shapes.Path;
+using PixelPoint = Windows.Graphics.PointInt32;
 
 namespace WSnip.App.Capture;
 
 /// <summary>The region the user picked, in physical virtual-desktop pixels.</summary>
 public sealed record SnipSelection(SnipMode Mode, PixelRect Region, IReadOnlyList<(double X, double Y)>? Outline);
-
-/// <summary>The part of a display's image that an overlay window shows, and the image pixels per window unit.</summary>
-internal readonly record struct OverlayView(MonitorCapture Monitor, PixelRect Source, double Scale);
 
 /// <summary>
 /// The frozen-screen overlay: one borderless topmost window per display showing what was captured,
@@ -62,19 +62,9 @@ public sealed class OverlaySession : IDisposable
     {
         MonitorCapture barMonitor = snapshot.MonitorAt(pointer.X, pointer.Y)
             ?? snapshot.Monitors.FirstOrDefault(m => m.IsPrimary) ?? snapshot.Monitors[0];
-        if (!placeWindows)
-        {
-            var window = new OverlayWindow(this, barMonitor, showBar: true, fullScreen: true);
-            windows.Add(window);
-            window.Show();
-            window.Activate();
-            UpdateHover(pointer);
-            return result.Task;
-        }
-
         foreach (MonitorCapture monitor in snapshot.Monitors)
         {
-            var window = new OverlayWindow(this, monitor, showBar: monitor == barMonitor, fullScreen: false);
+            var window = new OverlayWindow(this, monitor, monitor == barMonitor);
             windows.Add(window);
             window.Show();
         }
@@ -82,27 +72,6 @@ public sealed class OverlaySession : IDisposable
         windows.FirstOrDefault(w => w.Monitor == barMonitor)?.Activate();
         UpdateHover(pointer);
         return result.Task;
-    }
-
-    /// <summary>
-    /// The captured pixels under a screen, given in the coordinates the windowing system gives
-    /// screens: the display with those bounds, or else the capture covering the screen's center,
-    /// such as one of a whole workspace.
-    /// </summary>
-    internal OverlayView? ViewOf(PixelRect screen)
-    {
-        MonitorCapture? monitor = snapshot.Monitors.FirstOrDefault(m => (m.LogicalBounds ?? m.Bounds) == screen)
-            ?? snapshot.Monitors.FirstOrDefault(m => (m.LogicalBounds ?? m.Bounds).Contains(screen.X + screen.Width / 2, screen.Y + screen.Height / 2));
-        if (monitor is null)
-            return null;
-
-        PixelRect logical = monitor.LogicalBounds ?? monitor.Bounds;
-        double scale = (double)monitor.Bounds.Width / logical.Width;
-        PixelRect source = new PixelRect(
-                (int)Math.Round((screen.X - logical.X) * scale), (int)Math.Round((screen.Y - logical.Y) * scale),
-                (int)Math.Round(screen.Width * scale), (int)Math.Round(screen.Height * scale))
-            .Intersect(new PixelRect(0, 0, monitor.Image.Width, monitor.Image.Height));
-        return source.IsEmpty ? null : new OverlayView(monitor, source, scale);
     }
 
     /// <summary>Redraws the windows after one of them changed what it shows.</summary>
@@ -222,7 +191,7 @@ public sealed class OverlaySession : IDisposable
             return;
         finished = true;
         foreach (OverlayWindow window in windows)
-            window.Close();
+            window.CloseSafely();
         windows.Clear();
         result.TrySetResult(selected);
     }
@@ -235,369 +204,141 @@ public sealed class OverlaySession : IDisposable
     }
 }
 
-/// <summary>A borderless window covering one display with its frozen image.</summary>
-internal sealed class OverlayWindow : Window
+
+internal sealed class OverlayWindow : AppWindowBase
 {
     private readonly OverlaySession session;
-    private readonly HdrImageView frozen;
-    private readonly bool fullScreen;
-    private OverlayView? view;
-    private DispatcherTimer? follow;
-
-    /// <param name="fullScreen">
-    /// Fills whichever display the compositor puts the window on, and shows the captured pixels of
-    /// that display once it is known; otherwise the window is placed over <paramref name="monitor"/>.
-    /// </param>
-    public OverlayWindow(OverlaySession session, MonitorCapture monitor, bool showBar, bool fullScreen)
+    private readonly OverlaySurface surface;
+    private readonly DispatcherTimer follow = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private bool pressed;
+    public MonitorCapture Monitor { get; }
+    public OverlayWindow(OverlaySession session, MonitorCapture monitor, bool showBar)
     {
-        this.session = session;
-        this.fullScreen = fullScreen;
-        Monitor = monitor;
-        WindowDecorations = WindowDecorations.None;
-        ShowInTaskbar = false;
-        Topmost = true;
-        Background = Brushes.Black;
-        if (!fullScreen)
-        {
-            CanResize = false;
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            Position = new PixelPoint(monitor.Bounds.X, monitor.Bounds.Y);
-        }
-
-        Width = monitor.Bounds.Width / monitor.Scaling;
-        Height = monitor.Bounds.Height / monitor.Scaling;
+        this.session = session; Monitor = monitor;
         Title = AppStrings.OverlayTitle;
-        Cursor = new Cursor(StandardCursorType.Cross);
-
-        frozen = new HdrImageView { Smooth = false };
-        ShowFrozenImage();
-        var canvas = new OverlayCanvas(session, this);
-        var root = new Grid();
-        root.Children.Add(frozen);
-        root.Children.Add(canvas);
+        MakeOverlay();
+        AppWindow.MoveAndResize(new RectInt32(monitor.Bounds.X, monitor.Bounds.Y, monitor.Bounds.Width, monitor.Bounds.Height));
+        surface = new OverlaySurface(session, monitor) { WindowHandle = Handle, FixedDisplay = monitor.Color };
+        surface.RenderingFailed += (_, e) => { session.Cancel(); MessageDialog.Show(null, "WSnip", e.Message); };
+        var root = new Grid(); root.Children.Add(surface);
         if (showBar)
             root.Children.Add(new SnipModeBar(session.Mode, session.SetMode, session.Cancel)
             {
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 24, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0,24,0,0),
             });
         Content = root;
-
-        session.Changed += OnSessionChanged;
-        Closed += (_, _) =>
+        surface.PointerPressed += (_, e) =>
         {
-            follow?.Stop();
-            session.Changed -= OnSessionChanged;
-            frozen.Image = null;
-            session.Cancel();
+            var p = e.GetCurrentPoint(surface);
+            if (p.Properties.IsRightButtonPressed) { session.Cancel(); return; }
+            if (!p.Properties.IsLeftButtonPressed) return;
+            pressed = true;
+            surface.CapturePointer(e.Pointer);
+            session.PointerPressed(Pointer(e.GetCurrentPoint(surface).Position));
+            follow.Start(); e.Handled = true;
         };
-        KeyDown += (_, e) =>
+        surface.PointerMoved += (_, e) => session.PointerMoved(Pointer(e.GetCurrentPoint(surface).Position));
+        surface.PointerReleased += (_, e) =>
         {
-            if (e.Key == Key.Escape)
-                session.Cancel();
+            if (!pressed) return;
+            pressed = false; follow.Stop();
+            var point = Pointer(e.GetCurrentPoint(surface).Position);
+            surface.ReleasePointerCapture(e.Pointer);
+            session.PointerReleased(point); e.Handled = true;
         };
+        surface.PointerCanceled += (_, _) => session.Cancel();
+        surface.PointerCaptureLost += (_, _) => { if (pressed) { pressed = false; follow.Stop(); session.Cancel(); } };
+        root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, e) => { if (e.Key == VirtualKey.Escape) { session.Cancel(); e.Handled = true; } }), true);
+        follow.Tick += (_, _) => { if (App.Platform!.Windows.TryGetCursorPosition(out int x,out int y)) session.PointerMoved(new PixelPoint(x,y)); };
+        session.Changed += SessionChanged;
+        Opened += (_, _) => AppWindow.MoveAndResize(new RectInt32(monitor.Bounds.X,monitor.Bounds.Y,monitor.Bounds.Width,monitor.Bounds.Height));
+        Closed += (_, _) => { follow.Stop(); session.Changed -= SessionChanged; surface.Dispose(); session.Cancel(); };
     }
-
-    public MonitorCapture Monitor { get; private set; }
-
-    /// <summary>The shown part of the display's image; all of it unless the window shows a view.</summary>
-    private PixelRect Source => view?.Source ?? new PixelRect(0, 0, Monitor.Image.Width, Monitor.Image.Height);
-
-    /// <summary>Image pixels per device-independent pixel of the window.</summary>
-    private double PixelScale => view?.Scale ?? RenderScaling;
-
-    /// <summary>Converts a window position in device-independent pixels to virtual-desktop pixels.</summary>
-    public PixelPoint ToPhysical(Point point)
+    private PixelPoint Pointer(Point local)
     {
-        double scale = PixelScale;
-        PixelRect source = Source;
-        return new PixelPoint(Monitor.Bounds.X + source.X + (int)Math.Floor(point.X * scale),
-            Monitor.Bounds.Y + source.Y + (int)Math.Floor(point.Y * scale));
+        if (App.Platform!.Windows.TryGetCursorPosition(out int x,out int y)) return new PixelPoint(x,y);
+        return new PixelPoint(Monitor.Bounds.X + (int)(local.X * RenderScaling), Monitor.Bounds.Y + (int)(local.Y * RenderScaling));
     }
+    private void SessionChanged(object? sender, EventArgs e) => surface.InvalidateVisual();
+}
 
-    public Point ToLocal(double x, double y)
+internal sealed class OverlaySurface : HdrSurface
+{
+    private readonly OverlaySession session;
+    private readonly MonitorCapture monitor;
+    private readonly SharedImage image;
+    public OverlaySurface(OverlaySession session, MonitorCapture monitor)
     {
-        double scale = PixelScale;
-        PixelRect source = Source;
-        return new Point((x - Monitor.Bounds.X - source.X) / scale, (y - Monitor.Bounds.Y - source.Y) / scale);
+        this.session = session; this.monitor = monitor;
+        image = SharedImage.FromLinear(monitor.Image,monitor.Color.WhiteScale);
+        ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Cross);
     }
-
-    protected override void OnOpened(EventArgs e)
+    private SKPoint Local(double x,double y) => new((float)((x-monitor.Bounds.X)/RasterScale),(float)((y-monitor.Bounds.Y)/RasterScale));
+    protected override void Draw(SKCanvas canvas)
     {
-        base.OnOpened(e);
-        if (fullScreen)
+        var area = new SKRect(0,0,(float)ActualWidth,(float)ActualHeight);
+        SnipDrawing.Draw(canvas,image,area,[],false,Surface.ReferenceWhiteScale,false);
+        using var builder = new SKPathBuilder();
+        if (session.Mode == SnipMode.Freeform && session.Outline is { Count: >= 2 } outline)
         {
-            WindowState = WindowState.FullScreen;
-            FollowScreen();
-            return;
+            builder.MoveTo(Local(outline[0].X,outline[0].Y));
+            foreach (var point in outline.Skip(1)) builder.LineTo(Local(point.X,point.Y));
+            builder.Close();
         }
-
-        // A window placed while hidden can keep the DPI of another display; Windows applies the DPI
-        // of the display under it when it moves while visible, then resizes it for the new scale.
-        ScalingChanged += (_, _) => Dispatcher.UIThread.Post(FitToMonitor);
-        Position = new PixelPoint(Monitor.Bounds.X + 1, Monitor.Bounds.Y + 1);
-        FitToMonitor();
-    }
-
-    /// <summary>Covers the display exactly at the window's current scale.</summary>
-    private void FitToMonitor()
-    {
-        Position = new PixelPoint(Monitor.Bounds.X, Monitor.Bounds.Y);
-        double width = Monitor.Bounds.Width / RenderScaling;
-        double height = Monitor.Bounds.Height / RenderScaling;
-        // A scale change that keeps the window's pixel size leaves its client size stale; resizing refreshes it.
-        if (Math.Abs(ClientSize.Width - width) > 1 || Math.Abs(ClientSize.Height - height) > 1)
+        else if (session.Selection is { Width: > 0, Height: > 0 } rect)
         {
-            Width = width - 2;
-            Height = height - 2;
-            UpdateLayout();
+            var a=Local(rect.X,rect.Y); var b=Local(rect.Right,rect.Bottom);
+            builder.AddRect(new SKRect(a.X,a.Y,b.X,b.Y));
         }
-
-        Width = width;
-        Height = height;
+        using var hole = builder.Detach();
+        using var dim = new SKPaint { Color = new SKColor(0,0,0,144) };
+        canvas.Save(); canvas.ClipPath(hole,SKClipOperation.Difference); canvas.DrawRect(area,dim); canvas.Restore();
+        using var shadow = new SKPaint { Color = new SKColor(0,0,0,160),Style = SKPaintStyle.Stroke,StrokeWidth = 3.5f,IsAntialias = true };
+        canvas.DrawPath(hole,shadow);
+        using var linear = SKColorSpace.CreateSrgbLinear();
+        using var border = new SKPaint { Style = SKPaintStyle.Stroke,StrokeWidth = 1.5f,IsAntialias = true };
+        border.SetColor(new SKColorF(1,1,1,1),linear);
+        canvas.DrawPath(hole,border);
     }
+    public override void Dispose() { image.Release(); base.Dispose(); }
+}
 
-    /// <summary>
-    /// Shows the captured pixels of the screen the compositor put the window on. The screen is known
-    /// once the window appears on it, a few frames after it opens.
-    /// </summary>
-    private void FollowScreen()
+internal sealed class SnipModeBar : UserControl
+{
+    public SnipModeBar(SnipMode selected, Action<SnipMode> select, Action cancel)
     {
-        int ticks = 0;
-        follow = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-        follow.Tick += (_, _) =>
+        Background = new SolidColorBrush(Microsoft.UI.Colors.Black);
+        CornerRadius = new CornerRadius(8); Padding = new Thickness(8);
+        RequestedTheme = ElementTheme.Dark;
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        var buttons = new List<ToggleButton>();
+        foreach (var option in SnipModeOption.All)
         {
-            if (++ticks >= 40)
-                follow.Stop();
-            if (Screens.ScreenFromTopLevel(this) is not { } screen)
-                return;
-            Avalonia.PixelRect bounds = screen.Bounds;
-            if (session.ViewOf(new PixelRect(bounds.X, bounds.Y, bounds.Width, bounds.Height)) is not { } found || found == view)
-                return;
-            bool picture = found.Monitor != Monitor || found.Source != Source;
-            view = found;
-            Monitor = found.Monitor;
-            if (picture)
-                ShowFrozenImage();
-            session.Refresh();
-        };
-        follow.Start();
-    }
-
-    private void ShowFrozenImage()
-    {
-        PixelRect source = Source;
-        using HdrImage image = Monitor.Image.View(source);
-        SharedImage shared = SharedImage.FromLinear(image, Monitor.Color.WhiteScale);
-        frozen.Image = shared;
-        shared.Release();
-    }
-
-    private void OnSessionChanged(object? sender, EventArgs e)
-    {
-        foreach (Control child in ((Grid)Content!).Children)
-            child.InvalidateVisual();
+            var button = new ToggleButton { Content = new SymbolIcon(option.Mode switch { SnipMode.Window => Symbol.OpenPane, SnipMode.Fullscreen => Symbol.FullScreen, SnipMode.Freeform => Symbol.Edit, SnipMode.WholeWindow => Symbol.BrowsePhotos, _ => Symbol.SelectAll }), IsChecked = option.Mode == selected };
+            ToolTipService.SetToolTip(button,string.Format(AppStrings.ModeDescription,option.Label,option.Description));
+            AutomationProperties.SetName(button,option.Label);
+            AutomationProperties.SetAutomationId(button,$"SnipMode{option.Mode}");
+            button.Click += (_, _) => { foreach(var other in buttons) other.IsChecked = other == button; select(option.Mode); };
+            buttons.Add(button); panel.Children.Add(button);
+        }
+        var close = new Button { Content = new SymbolIcon(Symbol.Cancel) };
+        AutomationProperties.SetName(close,AppStrings.Cancel);
+        AutomationProperties.SetAutomationId(close,"CancelSnip");
+        ToolTipService.SetToolTip(close,AppStrings.CancelTip);
+        close.Click += (_, _) => cancel(); panel.Children.Add(close); Content = panel;
     }
 }
 
-internal sealed class SnipModeBar : Border
+internal sealed class WholeWindowToolbar : AppWindowBase
 {
-    protected override Type StyleKeyOverride => typeof(Border);
-
-    public SnipModeBar(SnipMode selectedMode, Action<SnipMode> selectMode, Action cancel)
-    {
-        var modeButtons = new List<ToggleButton>();
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        foreach (SnipModeOption option in SnipModeOption.All)
-        {
-            SnipMode mode = option.Mode;
-            var button = new ToggleButton
-            {
-                Classes = { "tool" },
-                Content = CreateIcon(option.IconKey),
-                IsChecked = selectedMode == mode,
-                Cursor = new Cursor(StandardCursorType.Arrow),
-            };
-            ToolTip.SetTip(button, string.Format(AppStrings.ModeDescription, option.Label, option.Description));
-            AutomationProperties.SetName(button, option.Label);
-            button.Click += (_, _) =>
-            {
-                selectMode(mode);
-                foreach (ToggleButton other in modeButtons)
-                    other.IsChecked = other == button;
-            };
-            modeButtons.Add(button);
-            panel.Children.Add(button);
-        }
-
-        panel.Children.Add(new Border { Classes = { "divider" } });
-        var close = new Button { Classes = { "icon" }, Content = CreateIcon("IconClose"), Cursor = new Cursor(StandardCursorType.Arrow) };
-        ToolTip.SetTip(close, AppStrings.CancelTip);
-        close.Click += (_, _) => cancel();
-        panel.Children.Add(close);
-
-        Classes.Add("overlayBar");
-        Child = panel;
-    }
-
-    private static Control CreateIcon(string key) =>
-        new Viewbox { Width = 18, Height = 18, Child = new ShapePath { Data = Application.Current?.FindResource(key) as Geometry } };
-}
-
-internal sealed class WholeWindowToolbar : Window
-{
+    public SnipMode? RequestedMode { get; private set; }
     public WholeWindowToolbar(PixelPoint pointer, bool placeWindow, Action cancel)
     {
-        WindowDecorations = WindowDecorations.None;
-        ShowInTaskbar = false;
-        Topmost = true;
-        CanResize = false;
-        SizeToContent = SizeToContent.WidthAndHeight;
-        Background = Brushes.Transparent;
-        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
-        WindowStartupLocation = placeWindow ? WindowStartupLocation.Manual : WindowStartupLocation.CenterScreen;
-        Title = AppStrings.OverlayTitle;
-        Content = new SnipModeBar(SnipMode.WholeWindow, mode =>
-        {
-            if (mode == SnipMode.WholeWindow)
-                return;
-            RequestedMode = mode;
-            cancel();
-        }, cancel);
+        Title = AppStrings.OverlayTitle; MakeOverlay();
+        Content = new SnipModeBar(SnipMode.WholeWindow, mode => { if(mode != SnipMode.WholeWindow) { RequestedMode = mode; cancel(); } }, cancel);
+        var display = Microsoft.UI.Windowing.DisplayArea.GetFromPoint(pointer,Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+        Position = new PointInt32(display.OuterBounds.X + display.OuterBounds.Width / 2 - 180,display.OuterBounds.Y + 24);
+        SetSize(380,64);
         Closed += (_, _) => cancel();
-        KeyDown += (_, args) =>
-        {
-            if (args.Key == Key.Escape)
-                cancel();
-        };
-
-        if (placeWindow)
-        {
-            Position = pointer;
-            Opened += (_, _) => PlaceBar();
-            ScalingChanged += (_, _) => PlaceBar();
-            SizeChanged += (_, _) => PlaceBar();
-        }
-
-        void PlaceBar()
-        {
-            if (Screens.ScreenFromPoint(pointer) is not { } screen)
-                return;
-            Position = new PixelPoint(screen.Bounds.X + (screen.Bounds.Width - (int)Math.Round(ClientSize.Width * RenderScaling)) / 2,
-                screen.Bounds.Y + (int)Math.Round(24 * RenderScaling));
-        }
-    }
-
-    public SnipMode? RequestedMode { get; private set; }
-}
-
-/// <summary>Dims everything but the selection and turns pointer input into selection updates.</summary>
-/// <remarks>The selection is left undrawn, so the control claims hits itself rather than relying on drawn content.</remarks>
-internal sealed class OverlayCanvas : Control, Avalonia.Rendering.ICustomHitTest
-{
-    private static readonly IBrush Dim = new SolidColorBrush(Color.FromArgb(0x90, 0, 0, 0));
-    private static readonly IPen Outline = new Pen(Brushes.White, 1.5);
-    private static readonly IPen Shadow = new Pen(new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)), 3.5);
-    private readonly OverlaySession session;
-    private readonly OverlayWindow window;
-
-    public OverlayCanvas(OverlaySession session, OverlayWindow window)
-    {
-        this.session = session;
-        this.window = window;
-        Focusable = true;
-    }
-
-    public bool HitTest(Point point) => new Rect(Bounds.Size).Contains(point);
-
-    public override void Render(DrawingContext context)
-    {
-        var bounds = new Rect(Bounds.Size);
-        Geometry? hole = SelectionGeometry();
-        if (hole is null)
-        {
-            context.FillRectangle(Dim, bounds);
-            return;
-        }
-
-        var dimmed = new GeometryGroup { FillRule = FillRule.EvenOdd };
-        dimmed.Children.Add(new RectangleGeometry(bounds));
-        dimmed.Children.Add(hole);
-        context.DrawGeometry(Dim, null, dimmed);
-        context.DrawGeometry(null, Shadow, hole);
-        context.DrawGeometry(null, Outline, hole);
-
-        if (session.Selection is { } rect && session.Mode != SnipMode.Freeform)
-            DrawSize(context, rect);
-    }
-
-    private Geometry? SelectionGeometry()
-    {
-        if (session.Mode == SnipMode.Freeform && session.Outline is { Count: >= 2 } points)
-        {
-            var geometry = new StreamGeometry();
-            using (StreamGeometryContext stream = geometry.Open())
-            {
-                stream.BeginFigure(window.ToLocal(points[0].X, points[0].Y), true);
-                for (int i = 1; i < points.Count; i++)
-                    stream.LineTo(window.ToLocal(points[i].X, points[i].Y));
-                stream.EndFigure(true);
-            }
-
-            return geometry;
-        }
-
-        if (session.Selection is not { } rect || rect.Width <= 0 || rect.Height <= 0)
-            return null;
-        Point topLeft = window.ToLocal(rect.X, rect.Y);
-        Point bottomRight = window.ToLocal(rect.Right, rect.Bottom);
-        return new RectangleGeometry(new Rect(topLeft, bottomRight));
-    }
-
-    private void DrawSize(DrawingContext context, PixelRect rect)
-    {
-        Point topLeft = window.ToLocal(rect.X, rect.Y);
-        if (topLeft.X > Bounds.Width || topLeft.Y > Bounds.Height || window.ToLocal(rect.Right, rect.Bottom) is { X: < 0 } or { Y: < 0 })
-            return;
-        var text = new FormattedText($"{rect.Width} \u00D7 {rect.Height}", System.Globalization.CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight, new Typeface("Inter"), 12, Brushes.White);
-        double x = Math.Clamp(topLeft.X, 4, Math.Max(4, Bounds.Width - text.Width - 16));
-        double y = topLeft.Y - text.Height - 12 >= 0 ? topLeft.Y - text.Height - 10 : topLeft.Y + 8;
-        context.FillRectangle(new SolidColorBrush(Color.FromArgb(0xC0, 0x20, 0x20, 0x20)), new Rect(x, y, text.Width + 12, text.Height + 4), 4);
-        context.DrawText(text, new Point(x + 6, y + 2));
-    }
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        PointerPoint point = e.GetCurrentPoint(this);
-        if (point.Properties.IsRightButtonPressed)
-        {
-            session.Cancel();
-            return;
-        }
-
-        if (!point.Properties.IsLeftButtonPressed)
-            return;
-        e.Pointer.Capture(this);
-        session.PointerPressed(window.ToPhysical(point.Position));
-        e.Handled = true;
-    }
-
-    protected override void OnPointerMoved(PointerEventArgs e)
-    {
-        base.OnPointerMoved(e);
-        session.PointerMoved(window.ToPhysical(e.GetPosition(this)));
-    }
-
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        if (e.InitialPressMouseButton != MouseButton.Left)
-            return;
-        e.Pointer.Capture(null);
-        session.PointerReleased(window.ToPhysical(e.GetPosition(this)));
-        e.Handled = true;
     }
 }

@@ -1,34 +1,44 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!--
-    Cross-platform user interface: the capture overlay, the editor, settings and the tray. Platform
-    features come in through WSnip.Core.Platform, supplied by the application head.
-  -->
   <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>WSnip</AssemblyName>
     <RootNamespace>WSnip.App</RootNamespace>
-    <IsAotCompatible>true</IsAotCompatible>
-    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\wsnip.ico</ApplicationIcon>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <Platform Condition="'$(Platform)' == 'AnyCPU' and '$(RuntimeIdentifier)' == 'win-arm64'">ARM64</Platform>
+    <Platform Condition="'$(Platform)' == 'AnyCPU'">x64</Platform>
+    <PlatformTarget>$(Platform)</PlatformTarget>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <SelfContained>true</SelfContained>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Avalonia" />
-    <PackageReference Include="Avalonia.Skia" />
-    <PackageReference Include="Avalonia.Themes.Fluent" />
-    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinUIAnalyzer" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" />
     <PackageReference Include="SkiaSharp" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
-    <PackageReference Include="HarfBuzzSharp" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <PackageReference Include="LightStudio.Ffmpeg" />
     <ProjectReference Include="..\WSnip.Core\WSnip.Core.csproj" />
-    <ProjectReference Include="$(LightPlayerRoot)src\LightMediaRenderer.Avalonia\LightMediaRenderer.Avalonia.csproj" />
+    <ProjectReference Include="..\WSnip.Windows\WSnip.Windows.csproj" />
   </ItemGroup>
-
   <ItemGroup>
-    <AvaloniaResource Include="Assets\**" />
-    <Compile Include="$(LightPlayerRoot)src\LightStudio.LightPlayer\Services\MenuBackdrop.cs" Link="Services\MenuBackdrop.cs" />
-    <AvaloniaResource Include="$(LightPlayerRoot)src\LightStudio.LightPlayer\Themes\MenuBackdrops.axaml" Link="Themes\MenuBackdrops.axaml" />
-    <AvaloniaResource Include="$(LightPlayerRoot)src\LightStudio.LightPlayer\Themes\WinUIMenus.axaml" Link="Themes\WinUIMenus.axaml" />
+    <Compile Include="..\..\tests\Fixtures\PresentationFixture.cs" Link="Rendering\PresentationFixture.cs" Condition="'$(Configuration)' == 'Debug'" />
+    <Content Include="Assets\wsnip.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\packaging\WSnipMSIX\Images\*.png" Link="Images\%(Filename)%(Extension)" />
+    <PRIResource Include="..\..\packaging\WSnipMSIX\Resources.resw" Link="Resources.resw" />
+    <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
+  <Target Name="RequireWindowsArchitecture" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Platform)' != 'x64' and '$(Platform)' != 'ARM64'" Text="Build WSnip with -p:Platform=x64 or -p:Platform=ARM64." />
+  </Target>
 </Project>
