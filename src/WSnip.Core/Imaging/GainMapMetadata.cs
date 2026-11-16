@@ -61,7 +61,7 @@ public sealed record GainMapMetadata(
     public string ToGainMapXmp()
     {
         var builder = new StringBuilder();
-        builder.Append("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"WSnip\">");
+        builder.Append("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"FluentWSnip\">");
         builder.Append("<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">");
         builder.Append("<rdf:Description rdf:about=\"\" xmlns:hdrgm=\"http://ns.adobe.com/hdr-gain-map/1.0/\"");
         builder.Append(" hdrgm:Version=\"1.0\"");

@@ -4,7 +4,7 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
-  <data name="SettingsTitle" xml:space="preserve"><value>WSnip-Einstellungen</value></data>
+  <data name="SettingsTitle" xml:space="preserve"><value>FluentWSnip-Einstellungen</value></data>
   <data name="Settings" xml:space="preserve"><value>Einstellungen</value></data>
   <data name="TakingSnips" xml:space="preserve"><value>Aufnahme</value></data>
   <data name="Shortcut" xml:space="preserve"><value>Tastenkombination</value></data>
@@ -62,7 +62,7 @@
   <data name="SaveAsTip" xml:space="preserve"><value>Speichern unter (Strg+S)</value></data>
   <data name="More" xml:space="preserve"><value>Mehr</value></data>
   <data name="OpenFolder" xml:space="preserve"><value>Screenshot-Ordner öffnen</value></data>
-  <data name="ExitWSnip" xml:space="preserve"><value>WSnip beenden</value></data>
+  <data name="ExitWSnip" xml:space="preserve"><value>FluentWSnip beenden</value></data>
   <data name="AddColor" xml:space="preserve"><value>Farbe hinzufügen</value></data>
   <data name="PickColorTip" xml:space="preserve"><value>Farbe aus der Aufnahme wählen, einschließlich HDR und erweitertem Farbraum (Esc zum Beenden)</value></data>
   <data name="PickColor" xml:space="preserve"><value>Farbe aus der Aufnahme wählen</value></data>
@@ -92,8 +92,8 @@
   <data name="ThemeSystem" xml:space="preserve"><value>Systemeinstellung verwenden</value></data>
   <data name="ThemeLight" xml:space="preserve"><value>Hell</value></data>
   <data name="ThemeDark" xml:space="preserve"><value>Dunkel</value></data>
-  <data name="SystemShortcutsCaption" xml:space="preserve"><value>Weisen Sie den Aufnahmeaktionen von WSnip in den Systemeinstellungen Tastenkombinationen zu.</value></data>
-  <data name="About" xml:space="preserve"><value>WSnip {0}. HDR-Aufnahmen bewahren ihre Spitzlichter und ihren erweiterten Farbraum; Apps ohne HDR-Unterstützung zeigen die SDR-Version.</value></data>
+  <data name="SystemShortcutsCaption" xml:space="preserve"><value>Weisen Sie den Aufnahmeaktionen von FluentWSnip in den Systemeinstellungen Tastenkombinationen zu.</value></data>
+  <data name="About" xml:space="preserve"><value>FluentWSnip {0}. HDR-Aufnahmen bewahren ihre Spitzlichter und ihren erweiterten Farbraum; Apps ohne HDR-Unterstützung zeigen die SDR-Version.</value></data>
   <data name="UnavailableFormats" xml:space="preserve"><value>Nicht verfügbare Formate: {0}.</value></data>
   <data name="HotkeyRefusal" xml:space="preserve"><value>{0} Wählen Sie eine andere Kombination.</value></data>
   <data name="SaveFolderTitle" xml:space="preserve"><value>Ordner für gespeicherte Aufnahmen</value></data>
@@ -120,8 +120,8 @@
   <data name="SaveSnip" xml:space="preserve"><value>Aufnahme speichern</value></data>
   <data name="Saving" xml:space="preserve"><value>Wird gespeichert…</value></data>
   <data name="SaveFailed" xml:space="preserve"><value>Die Aufnahme konnte nicht gespeichert werden.&#xA;&#xA;{0}</value></data>
-  <data name="EditorTitle" xml:space="preserve"><value>WSnip — {0}</value></data>
-  <data name="NoSystemHotkeyHint" xml:space="preserve"><value>Wählen Sie Neu, um den Bildschirm aufzunehmen, oder weisen Sie der Aktion Neue Aufnahme von WSnip in den Systemeinstellungen eine Tastenkombination zu.</value></data>
+  <data name="EditorTitle" xml:space="preserve"><value>FluentWSnip — {0}</value></data>
+  <data name="NoSystemHotkeyHint" xml:space="preserve"><value>Wählen Sie Neu, um den Bildschirm aufzunehmen, oder weisen Sie der Aktion Neue Aufnahme von FluentWSnip in den Systemeinstellungen eine Tastenkombination zu.</value></data>
   <data name="NoHotkey" xml:space="preserve"><value>eine Tastenkombination (keine festgelegt)</value></data>
   <data name="HotkeyErrorHint" xml:space="preserve"><value>Wählen Sie Neu, um den Bildschirm aufzunehmen. {0} Wählen Sie in den Einstellungen eine andere Tastenkombination.</value></data>
   <data name="HotkeyHint" xml:space="preserve"><value>Drücken Sie überall {0} oder wählen Sie Neu, um den Bildschirm aufzunehmen. HDR und erweiterte Farben bleiben erhalten.</value></data>
@@ -147,9 +147,9 @@
   <data name="FullscreenPurpose" xml:space="preserve"><value>Vollbildaufnahmen</value></data>
   <data name="FreeformPurpose" xml:space="preserve"><value>Freiformaufnahmen</value></data>
   <data name="WholeWindowPurpose" xml:space="preserve"><value>Aufnahmen ganzer Fenster</value></data>
-  <data name="OpenWSnip" xml:space="preserve"><value>WSnip öffnen</value></data>
+  <data name="OpenWSnip" xml:space="preserve"><value>FluentWSnip öffnen</value></data>
   <data name="Exit" xml:space="preserve"><value>Beenden</value></data>
-  <data name="OverlayTitle" xml:space="preserve"><value>WSnip-Aufnahmeüberlagerung</value></data>
+  <data name="OverlayTitle" xml:space="preserve"><value>FluentWSnip-Aufnahmeüberlagerung</value></data>
   <data name="ModeDescription" xml:space="preserve"><value>{0}: {1}</value></data>
   <data name="CancelTip" xml:space="preserve"><value>Abbrechen (Esc)</value></data>
   <data name="OK" xml:space="preserve"><value>OK</value></data>
@@ -170,8 +170,8 @@
   <data name="AvifFormat" xml:space="preserve"><value>AVIF (Gain Map)</value></data>
   <data name="ScreenshotName" xml:space="preserve"><value>Screenshot {0}</value></data>
   <data name="InvalidPath" xml:space="preserve"><value>Ungültiger Pfad.</value></data>
-  <data name="MissingPipeWire" xml:space="preserve"><value>WSnip nimmt den Bildschirm über PipeWire auf, das auf diesem System fehlt. Installieren Sie PipeWire und das Bildschirmfreigabeportal Ihres Desktops, etwa xdg-desktop-portal-kde oder xdg-desktop-portal-gnome, und melden Sie sich erneut an.</value></data>
-  <data name="MissingPortal" xml:space="preserve"><value>WSnip nimmt den Bildschirm über das Bildschirmfreigabeportal des Desktops auf, das in dieser Sitzung nicht verfügbar ist. Installieren Sie xdg-desktop-portal mit dem Portal Ihres Desktops, etwa xdg-desktop-portal-kde oder xdg-desktop-portal-gnome, sowie PipeWire und melden Sie sich erneut an.</value></data>
+  <data name="MissingPipeWire" xml:space="preserve"><value>FluentWSnip nimmt den Bildschirm über PipeWire auf, das auf diesem System fehlt. Installieren Sie PipeWire und das Bildschirmfreigabeportal Ihres Desktops, etwa xdg-desktop-portal-kde oder xdg-desktop-portal-gnome, und melden Sie sich erneut an.</value></data>
+  <data name="MissingPortal" xml:space="preserve"><value>FluentWSnip nimmt den Bildschirm über das Bildschirmfreigabeportal des Desktops auf, das in dieser Sitzung nicht verfügbar ist. Installieren Sie xdg-desktop-portal mit dem Portal Ihres Desktops, etwa xdg-desktop-portal-kde oder xdg-desktop-portal-gnome, sowie PipeWire und melden Sie sich erneut an.</value></data>
   <data name="UnsupportedKey" xml:space="preserve"><value>Die Taste '{0}' wird nicht unterstützt.</value></data>
   <data name="HotkeyUsed" xml:space="preserve"><value>{0} wird bereits von einer anderen Anwendung oder von Windows verwendet.</value></data>
   <data name="HotkeyRegistrationFailed" xml:space="preserve"><value>{0} konnte nicht registriert werden (Fehler {1}).</value></data>
@@ -196,14 +196,14 @@
   <data name="KWinConnectionFailed" xml:space="preserve"><value>Die Verbindung zu KWin ist fehlgeschlagen: {0}.</value></data>
   <data name="ErrorCode" xml:space="preserve"><value>Fehler {0}</value></data>
   <data name="KWinWaitFailed" xml:space="preserve"><value>Das Warten auf KWin ist fehlgeschlagen (Fehler {0}).</value></data>
-  <data name="KWinUnavailable" xml:space="preserve"><value>KWin bietet WSnip {0} nicht mehr an.</value></data>
+  <data name="KWinUnavailable" xml:space="preserve"><value>KWin bietet FluentWSnip {0} nicht mehr an.</value></data>
   <data name="PipeWireConnectFailed" xml:space="preserve"><value>PipeWire konnte keine Verbindung zum freigegebenen Bildschirm herstellen (Fehler {0}).</value></data>
   <data name="PipeWireNoFrame" xml:space="preserve"><value>Der freigegebene Bildschirm hat kein Bild geliefert (PipeWire-Knoten {0}).</value></data>
   <data name="PipeWireLoopFailed" xml:space="preserve"><value>PipeWire konnte keine Thread-Schleife erstellen.</value></data>
   <data name="PipeWireStartFailed" xml:space="preserve"><value>PipeWire konnte nicht starten.</value></data>
   <data name="PipeWireStreamFailed" xml:space="preserve"><value>Der PipeWire-Stream von Knoten {0} ist fehlgeschlagen: {1}.</value></data>
   <data name="PipeWireStreamEnded" xml:space="preserve"><value>Der PipeWire-Stream von Knoten {0} wurde beendet.</value></data>
-  <data name="PipeWireFormatUnsupported" xml:space="preserve"><value>Der PipeWire-Stream von Knoten {0} hat ein Format gewählt, das WSnip nicht lesen kann.</value></data>
+  <data name="PipeWireFormatUnsupported" xml:space="preserve"><value>Der PipeWire-Stream von Knoten {0} hat ein Format gewählt, das FluentWSnip nicht lesen kann.</value></data>
   <data name="PipeWireCreateStreamFailed" xml:space="preserve"><value>PipeWire konnte keinen Stream für Knoten {0} erstellen.</value></data>
   <data name="PipeWireConnectNodeFailed" xml:space="preserve"><value>PipeWire konnte keine Verbindung zu Knoten {0} herstellen (Fehler {1}).</value></data>
   <data name="PixelFormatUnsupported" xml:space="preserve"><value>Das Pixelformat {0} wird nicht unterstützt.</value></data>

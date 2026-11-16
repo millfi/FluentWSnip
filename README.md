@@ -1,34 +1,52 @@
-# WSnip
+# FluentWSnip
 
 A screenshot tool with the feel of the Windows Snipping Tool that keeps HDR and wide color
 gamut content. Screens are captured at 16-bit float precision. SDR content stays pixel-exact, and
 HDR highlights are saved as gain-map images: SDR viewers show a tone-mapped base image, and HDR
 viewers restore the original brightness.
 
-WSnip is a Windows-only application built with WinUI 3 (Windows App SDK).
+FluentWSnip is a Windows-only application built with WinUI 3 (Windows App SDK).
 
-[![Get it from Microsoft](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/9PDM1H21NLB9)
+## Running alongside WSnip
+
+FluentWSnip installs and runs independently of the original WSnip:
+
+| Registration | FluentWSnip |
+| --- | --- |
+| Executable / execution alias | `FluentWSnip.exe` |
+| MSIX identity / single-instance IPC | `LightStudio.FluentWSnip` |
+| WiX installation / Start menu name | `FluentWSnip` |
+| Unpackaged settings | `%APPDATA%\FluentWSnip\settings.json` |
+| MSIX settings | `LocalState\FluentWSnip` in its own MSIX application data |
+| Default snips | `Screenshots\FluentWSnip` under the Windows Pictures folder |
+| Startup task / Run value | `FluentWSnipStartup` / `FluentWSnip` |
+
+The MSI and setup bundle have their own upgrade codes. Settings are not imported from WSnip,
+and development outputs use `artifacts/bin/FluentWSnip`, preserving the old WSnip development
+package's layout. Internal project paths and namespaces remain `WSnip.*`, so build commands
+are unchanged. Hotkeys must use different combinations in each app; Windows allows one default
+handler for `ms-screenclip`, and both apps remain available as independent choices.
 
 ## Features
 
 - **Snip modes:** rectangle, window, full screen and freeform, with an optional 3, 5 or 10 second
   delay and an option to include the cursor. The screen freezes behind one borderless overlay per
   display. Change mode from the overlay's bar; press Esc or right-click to cancel.
-- **Whole window mode:** the screen stays live and WSnip's own windows step aside. The pointer
+- **Whole window mode:** the screen stays live and FluentWSnip's own windows step aside. The pointer
   turns into a crosshair everywhere and the next click picks the window under it; the click does
   not reach that window. The window is read from the compositor whole, including parts covered by
   other windows and its own per-pixel transparency, so the snip has no desktop behind it. Esc or
-  right-click cancels, and WSnip's windows come back either way.
+  right-click cancels, and FluentWSnip's windows come back either way.
 - **Entry points:**
   - On Windows, a global hotkey with a user-assigned combination. It can be changed, set to Print Screen
-    or turned off. Each snipping mode can have a hotkey of its own too. WSnip refuses a hotkey
+    or turned off. Each snipping mode can have a hotkey of its own too. FluentWSnip refuses a hotkey
     that another of its hotkeys, another app or Windows already uses.
   - On Windows, a notification-area icon.
-  - `WSnip.exe --snip [rectangle|window|fullscreen|freeform|wholewindow]`.
+  - `FluentWSnip.exe --snip [rectangle|window|fullscreen|freeform|wholewindow]`.
   - On Windows, `--background` starts the app in the tray.
   - Later launches forward their command line to the running instance.
 - **Capture:** On Windows, Windows.Graphics.Capture delivers `R16G16B16A16Float` scRGB frames at
-  each display's SDR white level and peak brightness. Nothing is clipped to SDR or sRGB. WSnip's
+  each display's SDR white level and peak brightness. Nothing is clipped to SDR or sRGB. FluentWSnip's
   own windows stay open but are left out of the capture.
 - **Editor:**
   - Pen, highlighter, eraser and crop tools, with undo/redo, zoom and pan.
@@ -45,11 +63,11 @@ WSnip is a Windows-only application built with WinUI 3 (Windows App SDK).
     SDR sRGB; otherwise the narrowest of sRGB, Display P3 and BT.2020 with its brightness factor,
     plus linear scRGB), and luminance in multiples of SDR white and in nits at the capturing
     display's SDR white. It can be turned off in settings.
-  - On Windows, closing the window returns WSnip to the tray and discards the snip, which was
+  - On Windows, closing the window returns FluentWSnip to the tray and discards the snip, which was
     already copied or saved as the settings ask. Its pixels, undo history and window surfaces are
     released; reopening creates an empty editor in the previous position.
 - **Delivery:**
-  - Snips are copied to the clipboard and saved to `Pictures\Screenshots` automatically, using
+  - Snips are copied to the clipboard and saved to `Pictures\Screenshots\FluentWSnip` automatically, using
     Snipping Tool file names ("Screenshot 2026-09-30 101530.png").
   - Save as offers every format.
 - **Look:** Modern Windows styles and controls; light and dark themes; the system accent color;
@@ -57,7 +75,7 @@ WSnip is a Windows-only application built with WinUI 3 (Windows App SDK).
 
 ## Localization
 
-WSnip follows the system UI language at startup: en-US (the default and fallback), en-GB,
+FluentWSnip follows the system UI language at startup: en-US (the default and fallback), en-GB,
 es-ES, fr-FR, de-DE, ja-JP, zh-CN and zh-TW. There is no in-app language setting.
 
 UI text uses the existing .NET RESX resources in `src/WSnip.Core/Strings`, accessed from WinUI
@@ -116,7 +134,7 @@ JPEG. Large images are tiled when they exceed the encoder's picture-size limit.
 4. **PQ outputs** (JPEG XL, HDR PNG) map SDR white to 203 nits, per ITU-R BT.2408.
 5. **Clipboard.** Windows has no standard HDR clipboard format, so the clipboard gets the SDR
    rendition as PNG (keeping transparency) and as a DIB. The data is written right away, so it
-   stays pasteable after WSnip exits.
+   stays pasteable after FluentWSnip exits.
 
 The gain-map output has been checked against libavif and FFmpeg decoders, and against Light
 Player's decoders.
@@ -187,8 +205,8 @@ winapp package src/WSnip.App/WSnip.App.csproj --arch x64 --arch arm64 --no-sign
 ```
 
 The existing `packaging/WSnipMSIX/WSnipMSIX.wapproj` also targets the WinUI application, for the
-signed sideload bundle built by CI. It retains the existing package identity, startup task,
-`WSnip.exe` execution alias, screen-clipping protocol, and borderless capture capabilities.
+signed sideload bundle built by CI. It uses a separate FluentWSnip package identity and startup task,
+`FluentWSnip.exe` execution alias, screen-clipping protocol, and borderless capture capabilities.
 `packaging/Set-Version.ps1 -Tag v1.2.3` stamps both manifests and the assembly version.
 
 `packaging/WSnipSetup/build.ps1 [-Architecture x64,arm64]` builds the existing WiX installers from
@@ -201,13 +219,14 @@ The release workflow builds Windows x64/ARM64 MSIX and setup artifacts only. Sig
 
 ## Files
 
-- Settings: `%APPDATA%\WSnip\settings.json`; the MSIX package uses its own application data at
-  `%LOCALAPPDATA%\Packages\LightStudio.WSnip_<id>\LocalState\WSnip`.
-- Logs: `logs\wsnip.log` beside the settings.
-- Snips: the Windows Screenshots folder, or the folder selected in settings.
+- Settings: `%APPDATA%\FluentWSnip\settings.json`; the MSIX package uses its own application data at
+  `%LOCALAPPDATA%\Packages\LightStudio.FluentWSnip_<id>\LocalState\FluentWSnip`.
+- Logs: `logs\fluentwsnip.log` beside the settings.
+- Snips: `Pictures\Screenshots\FluentWSnip` (under the redirected Windows Screenshots folder when configured), or the folder selected in settings.
 - Startup: the MSIX startup task or, for the setup installation, the user's Run key.
 
-Existing settings, custom colors, export formats, and eight UI language catalogs are retained.
+The settings schema, custom colors, export formats, and eight UI language catalogs are retained.
+FluentWSnip starts with its own settings file, without modifying WSnip's preferences.
 
 ## Validation
 
@@ -220,6 +239,8 @@ The six presentation regression tests cover HDR highlights, negative wide-gamut 
 SDR white scaling, matching multiply highlighters to export, and image lifetime. The Debug-only
 fixture shows SDR/HDR ramps and P3 colors without capturing the desktop; it is excluded from
 Release builds. Actual HDR appearance still requires a suitable display and Windows HDR enabled.
+Two additional isolation tests verify independent instance locks and command forwarding for WSnip
+and FluentWSnip.
 
 ## Known limitations
 

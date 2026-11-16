@@ -200,7 +200,7 @@ public sealed class AppController : IDisposable
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             AppLog.Error("Snip", "Taking a snip failed.", exception);
-            MessageDialog.Show(editor is { IsVisible: true } ? editor : null, "WSnip", string.Format(AppStrings.CaptureFailed, exception.Message));
+            MessageDialog.Show(editor is { IsVisible: true } ? editor : null, "FluentWSnip", string.Format(AppStrings.CaptureFailed, exception.Message));
         }
         finally
         {
@@ -359,7 +359,7 @@ public sealed class AppController : IDisposable
         if (exiting)
             return;
         exiting = true;
-        AppLog.Information("Lifetime", "Exiting WSnip.");
+        AppLog.Information("Lifetime", "Exiting FluentWSnip.");
         Dispose();
         foreach (var window in Window.Windows.ToArray()) window.CloseSafely();
         app.Exit();
@@ -551,7 +551,7 @@ public sealed class AppController : IDisposable
             }
         }
         if (problem is not null)
-            MessageDialog.Show(editor is { IsVisible: true } ? editor : null, "WSnip", problem);
+            MessageDialog.Show(editor is { IsVisible: true } ? editor : null, "FluentWSnip", problem);
     }
 
     private EditorWindow EnsureEditor()
@@ -666,7 +666,7 @@ public sealed class AppController : IDisposable
         {
             if (tray is null)
             {
-                backgroundHost = new Window { Title = "WSnip background" };
+                backgroundHost = new Window { Title = "FluentWSnip background" };
                 backgroundHost.AppWindow.IsShownInSwitchers = false;
                 CreateTray();
             }

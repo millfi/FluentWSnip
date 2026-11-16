@@ -1,6 +1,6 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-    Name="WSnip"
+    Name="FluentWSnip"
     Manufacturer="Light Studio"
     Version="$(MsiVersion)"
     UpgradeCode="$(PackageUpgradeCode)"
@@ -13,8 +13,8 @@
       AllowSameVersionUpgrades="yes"
       DowngradeErrorMessage="A newer version of [ProductName] is already installed."
       Schedule="afterInstallInitialize" />
-    <Icon Id="WSnip.exe" SourceFile="$(IconPath)" />
-    <Property Id="ARPPRODUCTICON" Value="WSnip.exe" />
+    <Icon Id="FluentWSnip.exe" SourceFile="$(IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="FluentWSnip.exe" />
     <Property Id="DISABLEADVTSHORTCUTS" Value="1" />
 
     <InstallExecuteSequence>
@@ -22,54 +22,54 @@
     </InstallExecuteSequence>
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="WSnip" />
+      <Directory Id="INSTALLFOLDER" Name="FluentWSnip" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
 
     <ComponentGroup Id="PublishedFiles" Directory="INSTALLFOLDER">
       <Files Include="$(PublishDirectory)\**">
-        <Exclude Files="$(PublishDirectory)\WSnip.exe" />
+        <Exclude Files="$(PublishDirectory)\FluentWSnip.exe" />
         <Exclude Files="$(PublishDirectory)\**\*.pdb" />
         <Exclude Files="$(PublishDirectory)\**\*.dbg" />
       </Files>
     </ComponentGroup>
 
     <Component Id="ApplicationExecutable" Directory="INSTALLFOLDER" Guid="*">
-      <File Id="WSnipExecutable" Source="$(PublishDirectory)\WSnip.exe" KeyPath="yes">
+      <File Id="FluentWSnipExecutable" Source="$(PublishDirectory)\FluentWSnip.exe" KeyPath="yes">
         <Shortcut
           Id="StartMenuShortcut"
           Directory="ProgramMenuFolder"
-          Name="WSnip"
+          Name="FluentWSnip"
           Description="Screenshots that keep HDR and wide color"
           WorkingDirectory="INSTALLFOLDER"
           Advertise="yes" />
       </File>
-      <File Id="WSnipLicenseFile" Source="$(LicensePath)" Name="LICENSE.txt" />
-      <File Id="WSnipThirdPartyFile" Source="$(ThirdPartyPath)" Name="THIRDPARTY.txt" />
+      <File Id="FluentWSnipLicenseFile" Source="$(LicensePath)" Name="LICENSE.txt" />
+      <File Id="FluentWSnipThirdPartyFile" Source="$(ThirdPartyPath)" Name="THIRDPARTY.txt" />
     </Component>
 
-    <!-- Lets Run, scripts and shortcuts start WSnip.exe, with or without its snip switch, without a path. -->
+    <!-- Lets Run, scripts and shortcuts start FluentWSnip.exe, with or without its snip switch, without a path. -->
     <Component Id="ApplicationPathRegistration" Directory="INSTALLFOLDER" Guid="*">
       <RegistryValue
         Root="HKLM"
-        Key="Software\Microsoft\Windows\CurrentVersion\App Paths\WSnip.exe"
-        Value="[INSTALLFOLDER]WSnip.exe"
+        Key="Software\Microsoft\Windows\CurrentVersion\App Paths\FluentWSnip.exe"
+        Value="[INSTALLFOLDER]FluentWSnip.exe"
         KeyPath="yes" />
-      <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\WSnip.exe" Name="Path" Value="[INSTALLFOLDER]" />
+      <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\FluentWSnip.exe" Name="Path" Value="[INSTALLFOLDER]" />
     </Component>
 
     <Component Id="ScreenClippingRegistration" Directory="INSTALLFOLDER" Guid="*">
-      <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="WSnip" Value="Software\WSnip\Capabilities" KeyPath="yes" />
-      <RegistryValue Root="HKLM" Key="Software\WSnip\Capabilities" Name="ApplicationName" Value="WSnip" />
-      <RegistryValue Root="HKLM" Key="Software\WSnip\Capabilities" Name="ApplicationDescription" Value="Screenshots that keep HDR and wide color" />
-      <RegistryValue Root="HKLM" Key="Software\WSnip\Capabilities\URLAssociations" Name="ms-screenclip" Value="WSnip.ScreenClip" />
-      <RegistryValue Root="HKLM" Key="Software\Classes\WSnip.ScreenClip" Value="WSnip screen capture" />
-      <RegistryValue Root="HKLM" Key="Software\Classes\WSnip.ScreenClip" Name="URL Protocol" Value="" />
-      <RegistryValue Root="HKLM" Key="Software\Classes\WSnip.ScreenClip\DefaultIcon" Value="&quot;[INSTALLFOLDER]WSnip.exe&quot;,0" />
-      <RegistryValue Root="HKLM" Key="Software\Classes\WSnip.ScreenClip\shell\open\command" Value="&quot;[INSTALLFOLDER]WSnip.exe&quot; --snip" />
+      <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="FluentWSnip" Value="Software\FluentWSnip\Capabilities" KeyPath="yes" />
+      <RegistryValue Root="HKLM" Key="Software\FluentWSnip\Capabilities" Name="ApplicationName" Value="FluentWSnip" />
+      <RegistryValue Root="HKLM" Key="Software\FluentWSnip\Capabilities" Name="ApplicationDescription" Value="Screenshots that keep HDR and wide color" />
+      <RegistryValue Root="HKLM" Key="Software\FluentWSnip\Capabilities\URLAssociations" Name="ms-screenclip" Value="FluentWSnip.ScreenClip" />
+      <RegistryValue Root="HKLM" Key="Software\Classes\FluentWSnip.ScreenClip" Value="FluentWSnip screen capture" />
+      <RegistryValue Root="HKLM" Key="Software\Classes\FluentWSnip.ScreenClip" Name="URL Protocol" Value="" />
+      <RegistryValue Root="HKLM" Key="Software\Classes\FluentWSnip.ScreenClip\DefaultIcon" Value="&quot;[INSTALLFOLDER]FluentWSnip.exe&quot;,0" />
+      <RegistryValue Root="HKLM" Key="Software\Classes\FluentWSnip.ScreenClip\shell\open\command" Value="&quot;[INSTALLFOLDER]FluentWSnip.exe&quot; --snip" />
     </Component>
 
-    <Feature Id="MainFeature" Title="WSnip">
+    <Feature Id="MainFeature" Title="FluentWSnip">
       <ComponentGroupRef Id="PublishedFiles" />
       <ComponentRef Id="ApplicationExecutable" />
       <ComponentRef Id="ApplicationPathRegistration" />

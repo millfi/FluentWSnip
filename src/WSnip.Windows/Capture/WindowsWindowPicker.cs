@@ -52,7 +52,7 @@ public sealed unsafe class WindowsWindowPicker : IWindowPickerService
         if (Interlocked.CompareExchange(ref current, session, null) is not null)
             throw new InvalidOperationException("A window is already being picked.");
 
-        var thread = new Thread(() => Run(session)) { IsBackground = true, Name = "WSnip window picker" };
+        var thread = new Thread(() => Run(session)) { IsBackground = true, Name = "FluentWSnip window picker" };
         thread.Start();
         if (cancellationToken.CanBeCanceled)
         {

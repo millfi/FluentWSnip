@@ -13,8 +13,10 @@
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <Company>Light Studio</Company>
-    <Product>WSnip</Product>
+    <Product>FluentWSnip</Product>
     <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
+    <!-- Keep the original WSnip development package layout untouched. -->
+    <ArtifactsProjectName Condition="'$(MSBuildProjectName)' == 'WSnip.App'">FluentWSnip</ArtifactsProjectName>
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
     <!-- Shared Light Player sources and build scripts. -->
     <LightPlayerRoot Condition="'$(LightPlayerRoot)' == ''">$(MSBuildThisFileDirectory)..\LightPlayer\</LightPlayerRoot>

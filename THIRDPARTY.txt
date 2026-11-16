@@ -1,7 +1,7 @@
-WSnip — Third-Party Notices
+FluentWSnip — Third-Party Notices
 ===========================
 
-WSnip is built on the following third-party components. Each remains the property of its
+FluentWSnip is built on the following third-party components. Each remains the property of its
 respective authors and is used under the terms of the license noted below. The complete license
 text for every component is available at the referenced URL.
 
@@ -37,7 +37,7 @@ Adobe Gain Map
 Image encoding (FFmpeg)
 -----------------------
 FFmpeg
-  (shared libraries from LightStudio.Ffmpeg, installed next to WSnip.exe; used for the HEIC,
+  (shared libraries from LightStudio.Ffmpeg, installed next to FluentWSnip.exe; used for the HEIC,
    AVIF and JPEG XL encoders)
   License: GNU LGPL v2.1-or-later
   https://www.ffmpeg.org/legal.html

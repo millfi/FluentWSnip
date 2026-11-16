@@ -93,7 +93,7 @@ function ConvertTo-RtfText {
 
 $licenseText = [System.IO.File]::ReadAllText((Join-Path $repositoryRoot 'LICENSE'))
 $thirdPartyText = [System.IO.File]::ReadAllText((Join-Path $repositoryRoot 'THIRDPARTY.txt'))
-$bundleLicenseDirectory = Join-Path $repositoryRoot 'artifacts\obj\WSnipSetup\license'
+$bundleLicenseDirectory = Join-Path $repositoryRoot 'artifacts\obj\FluentWSnipSetup\license'
 $bundleLicensePath = Join-Path $bundleLicenseDirectory 'LicenseAndThirdParty.rtf'
 $bundleLicenseRtf = '{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fnil\fcharset0 Segoe UI;}}\viewkind4\uc1\pard\f0\fs18 ' +
     (ConvertTo-RtfText ($licenseText + "`r`n`r`n" + $thirdPartyText)) + '}'
@@ -103,14 +103,14 @@ New-Item -ItemType Directory -Path $bundleLicenseDirectory -Force | Out-Null
 foreach ($currentArchitecture in $Architecture) {
     $runtimeIdentifier = "win-$currentArchitecture"
     $msbuildPlatform = if ($currentArchitecture -eq 'arm64') { 'ARM64' } else { 'x64' }
-    $architectureRoot = Join-Path $repositoryRoot "artifacts\windows-installer\$currentArchitecture"
+    $architectureRoot = Join-Path $repositoryRoot "artifacts\fluent-windows-installer\$currentArchitecture"
     $dotnetArtifacts = Join-Path $architectureRoot 'dotnet'
     $publishDirectory = Join-Path $architectureRoot 'publish'
     $msiDirectory = Join-Path $architectureRoot 'msi'
-    $msiPath = Join-Path $msiDirectory "WSnip-$currentArchitecture.msi"
-    $setupPath = Join-Path $repositoryRoot "artifacts\release\WSnipSetup-$currentArchitecture.exe"
+    $msiPath = Join-Path $msiDirectory "FluentWSnip-$currentArchitecture.msi"
+    $setupPath = Join-Path $repositoryRoot "artifacts\release\FluentWSnipSetup-$currentArchitecture.exe"
 
-    if (-not ([IO.Path]::GetFullPath($architectureRoot).StartsWith($repositoryRoot + "\artifacts\windows-installer\", [StringComparison]::OrdinalIgnoreCase))) { throw "Unsafe installer output path." }
+    if (-not ([IO.Path]::GetFullPath($architectureRoot).StartsWith($repositoryRoot + "\artifacts\fluent-windows-installer\", [StringComparison]::OrdinalIgnoreCase))) { throw "Unsafe installer output path." }
     Remove-Item -LiteralPath $architectureRoot -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $setupPath -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $publishDirectory -Force | Out-Null
@@ -128,8 +128,8 @@ foreach ($currentArchitecture in $Architecture) {
         "-p:Version=$installerVersion"
     ) + $sharedProperties)
 
-    if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory 'WSnip.exe'))) {
-        throw "The $currentArchitecture publish did not produce WSnip.exe."
+    if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory 'FluentWSnip.exe'))) {
+        throw "The $currentArchitecture publish did not produce FluentWSnip.exe."
     }
 
     Invoke-DotNet -Arguments @(

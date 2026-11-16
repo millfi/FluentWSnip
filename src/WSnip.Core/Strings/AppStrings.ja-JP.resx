@@ -4,7 +4,7 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
-  <data name="SettingsTitle" xml:space="preserve"><value>WSnip の設定</value></data>
+  <data name="SettingsTitle" xml:space="preserve"><value>FluentWSnip の設定</value></data>
   <data name="Settings" xml:space="preserve"><value>設定</value></data>
   <data name="TakingSnips" xml:space="preserve"><value>キャプチャ</value></data>
   <data name="Shortcut" xml:space="preserve"><value>ショートカット</value></data>
@@ -62,7 +62,7 @@
   <data name="SaveAsTip" xml:space="preserve"><value>名前を付けて保存 (Ctrl+S)</value></data>
   <data name="More" xml:space="preserve"><value>その他</value></data>
   <data name="OpenFolder" xml:space="preserve"><value>スクリーンショットフォルダーを開く</value></data>
-  <data name="ExitWSnip" xml:space="preserve"><value>WSnip を終了</value></data>
+  <data name="ExitWSnip" xml:space="preserve"><value>FluentWSnip を終了</value></data>
   <data name="AddColor" xml:space="preserve"><value>色を追加</value></data>
   <data name="PickColorTip" xml:space="preserve"><value>キャプチャから色を選択します。HDR と広色域にも対応します (Esc で終了)</value></data>
   <data name="PickColor" xml:space="preserve"><value>キャプチャから色を選択</value></data>
@@ -92,8 +92,8 @@
   <data name="ThemeSystem" xml:space="preserve"><value>システム設定に従う</value></data>
   <data name="ThemeLight" xml:space="preserve"><value>ライト</value></data>
   <data name="ThemeDark" xml:space="preserve"><value>ダーク</value></data>
-  <data name="SystemShortcutsCaption" xml:space="preserve"><value>システム設定で WSnip のキャプチャ操作にショートカットを割り当ててください。</value></data>
-  <data name="About" xml:space="preserve"><value>WSnip {0}。HDR キャプチャはハイライトと広色域を保持します。HDR 非対応アプリでは SDR 版が表示されます。</value></data>
+  <data name="SystemShortcutsCaption" xml:space="preserve"><value>システム設定で FluentWSnip のキャプチャ操作にショートカットを割り当ててください。</value></data>
+  <data name="About" xml:space="preserve"><value>FluentWSnip {0}。HDR キャプチャはハイライトと広色域を保持します。HDR 非対応アプリでは SDR 版が表示されます。</value></data>
   <data name="UnavailableFormats" xml:space="preserve"><value>利用できない形式: {0}。</value></data>
   <data name="HotkeyRefusal" xml:space="preserve"><value>{0} 別のキーの組み合わせを選んでください。</value></data>
   <data name="SaveFolderTitle" xml:space="preserve"><value>キャプチャの保存先フォルダー</value></data>
@@ -120,8 +120,8 @@
   <data name="SaveSnip" xml:space="preserve"><value>キャプチャを保存</value></data>
   <data name="Saving" xml:space="preserve"><value>保存中…</value></data>
   <data name="SaveFailed" xml:space="preserve"><value>キャプチャを保存できませんでした。&#xA;&#xA;{0}</value></data>
-  <data name="EditorTitle" xml:space="preserve"><value>WSnip — {0}</value></data>
-  <data name="NoSystemHotkeyHint" xml:space="preserve"><value>「新規」を選んで画面をキャプチャするか、システム設定で WSnip の「新しいキャプチャ」にショートカットを割り当ててください。</value></data>
+  <data name="EditorTitle" xml:space="preserve"><value>FluentWSnip — {0}</value></data>
+  <data name="NoSystemHotkeyHint" xml:space="preserve"><value>「新規」を選んで画面をキャプチャするか、システム設定で FluentWSnip の「新しいキャプチャ」にショートカットを割り当ててください。</value></data>
   <data name="NoHotkey" xml:space="preserve"><value>ショートカット (未設定)</value></data>
   <data name="HotkeyErrorHint" xml:space="preserve"><value>「新規」を選んで画面をキャプチャしてください。{0} 設定で別のショートカットを選んでください。</value></data>
   <data name="HotkeyHint" xml:space="preserve"><value>どこからでも {0} を押すか、「新規」を選んで画面をキャプチャできます。HDR と広色域の内容も保持されます。</value></data>
@@ -147,9 +147,9 @@
   <data name="FullscreenPurpose" xml:space="preserve"><value>全画面のキャプチャ</value></data>
   <data name="FreeformPurpose" xml:space="preserve"><value>自由形のキャプチャ</value></data>
   <data name="WholeWindowPurpose" xml:space="preserve"><value>ウィンドウ全体のキャプチャ</value></data>
-  <data name="OpenWSnip" xml:space="preserve"><value>WSnip を開く</value></data>
+  <data name="OpenWSnip" xml:space="preserve"><value>FluentWSnip を開く</value></data>
   <data name="Exit" xml:space="preserve"><value>終了</value></data>
-  <data name="OverlayTitle" xml:space="preserve"><value>WSnip オーバーレイ</value></data>
+  <data name="OverlayTitle" xml:space="preserve"><value>FluentWSnip オーバーレイ</value></data>
   <data name="ModeDescription" xml:space="preserve"><value>{0}: {1}</value></data>
   <data name="CancelTip" xml:space="preserve"><value>キャンセル (Esc)</value></data>
   <data name="OK" xml:space="preserve"><value>OK</value></data>
@@ -170,8 +170,8 @@
   <data name="AvifFormat" xml:space="preserve"><value>AVIF (ゲインマップ)</value></data>
   <data name="ScreenshotName" xml:space="preserve"><value>スクリーンショット {0}</value></data>
   <data name="InvalidPath" xml:space="preserve"><value>無効なパスです。</value></data>
-  <data name="MissingPipeWire" xml:space="preserve"><value>WSnip は PipeWire を使って画面をキャプチャしますが、このシステムにはインストールされていません。PipeWire と、お使いのデスクトップの画面共有ポータル (xdg-desktop-portal-kde や xdg-desktop-portal-gnome など) をインストールしてから、再度ログインしてください。</value></data>
-  <data name="MissingPortal" xml:space="preserve"><value>WSnip はデスクトップの画面共有ポータルを使って画面をキャプチャしますが、このセッションでは利用できません。xdg-desktop-portal、お使いのデスクトップのポータル (xdg-desktop-portal-kde や xdg-desktop-portal-gnome など)、PipeWire をインストールしてから、再度ログインしてください。</value></data>
+  <data name="MissingPipeWire" xml:space="preserve"><value>FluentWSnip は PipeWire を使って画面をキャプチャしますが、このシステムにはインストールされていません。PipeWire と、お使いのデスクトップの画面共有ポータル (xdg-desktop-portal-kde や xdg-desktop-portal-gnome など) をインストールしてから、再度ログインしてください。</value></data>
+  <data name="MissingPortal" xml:space="preserve"><value>FluentWSnip はデスクトップの画面共有ポータルを使って画面をキャプチャしますが、このセッションでは利用できません。xdg-desktop-portal、お使いのデスクトップのポータル (xdg-desktop-portal-kde や xdg-desktop-portal-gnome など)、PipeWire をインストールしてから、再度ログインしてください。</value></data>
   <data name="UnsupportedKey" xml:space="preserve"><value>キー '{0}' は対応していません。</value></data>
   <data name="HotkeyUsed" xml:space="preserve"><value>{0} は他のアプリケーションまたは Windows で既に使用されています。</value></data>
   <data name="HotkeyRegistrationFailed" xml:space="preserve"><value>{0} を登録できませんでした (エラー {1})。</value></data>
@@ -196,14 +196,14 @@
   <data name="KWinConnectionFailed" xml:space="preserve"><value>KWin への接続に失敗しました: {0}。</value></data>
   <data name="ErrorCode" xml:space="preserve"><value>エラー {0}</value></data>
   <data name="KWinWaitFailed" xml:space="preserve"><value>KWin の待機に失敗しました (エラー {0})。</value></data>
-  <data name="KWinUnavailable" xml:space="preserve"><value>KWin は WSnip に {0} を提供しなくなりました。</value></data>
+  <data name="KWinUnavailable" xml:space="preserve"><value>KWin は FluentWSnip に {0} を提供しなくなりました。</value></data>
   <data name="PipeWireConnectFailed" xml:space="preserve"><value>PipeWire が共有画面に接続できませんでした (エラー {0})。</value></data>
   <data name="PipeWireNoFrame" xml:space="preserve"><value>共有画面からフレームを取得できませんでした (PipeWire ノード {0})。</value></data>
   <data name="PipeWireLoopFailed" xml:space="preserve"><value>PipeWire がスレッドループを作成できませんでした。</value></data>
   <data name="PipeWireStartFailed" xml:space="preserve"><value>PipeWire を起動できませんでした。</value></data>
   <data name="PipeWireStreamFailed" xml:space="preserve"><value>ノード {0} の PipeWire ストリームが失敗しました: {1}。</value></data>
   <data name="PipeWireStreamEnded" xml:space="preserve"><value>ノード {0} の PipeWire ストリームが終了しました。</value></data>
-  <data name="PipeWireFormatUnsupported" xml:space="preserve"><value>ノード {0} の PipeWire ストリームが WSnip で読み取れない形式を選択しました。</value></data>
+  <data name="PipeWireFormatUnsupported" xml:space="preserve"><value>ノード {0} の PipeWire ストリームが FluentWSnip で読み取れない形式を選択しました。</value></data>
   <data name="PipeWireCreateStreamFailed" xml:space="preserve"><value>PipeWire がノード {0} のストリームを作成できませんでした。</value></data>
   <data name="PipeWireConnectNodeFailed" xml:space="preserve"><value>PipeWire がノード {0} に接続できませんでした (エラー {1})。</value></data>
   <data name="PixelFormatUnsupported" xml:space="preserve"><value>ピクセル形式 {0} は対応していません。</value></data>

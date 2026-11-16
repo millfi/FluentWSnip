@@ -18,7 +18,7 @@ internal sealed class NativeTray : IDisposable
     {
         this.commands = commands;
         this.open = open;
-        hwnd = CreateWindowEx(0, "STATIC", "WSnip notification area", unchecked((int)0x80000000), 0, 0, 0, 0, 0, 0, 0, 0);
+        hwnd = CreateWindowEx(0, "STATIC", "FluentWSnip notification area", unchecked((int)0x80000000), 0, 0, 0, 0, 0, 0, 0, 0);
         if (hwnd == 0) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         callback = WndProc;
         if (!SetWindowSubclass(hwnd, callback, 1, 0)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
@@ -29,7 +29,7 @@ internal sealed class NativeTray : IDisposable
     private NotifyIconData Data() => new()
     {
         Size = (uint)Marshal.SizeOf<NotifyIconData>(), Window = hwnd, Id = 1,
-        Flags = 0x1 | 0x2 | 0x4, CallbackMessage = Callback, Icon = icon, Tip = "WSnip",
+        Flags = 0x1 | 0x2 | 0x4, CallbackMessage = Callback, Icon = icon, Tip = "FluentWSnip",
         Info = "", InfoTitle = "",
     };
     private void Add() { var data = Data(); ShellNotifyIcon(0, ref data); }

@@ -12,10 +12,10 @@ namespace WSnip.Windows;
 public sealed class WindowsShellService : IShellService
 {
     /// <summary>The TaskId of the startup task in the MSIX manifest.</summary>
-    public const string StartupTaskId = "WSnipStartup";
+    public const string StartupTaskId = "FluentWSnipStartup";
 
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string RunValue = "WSnip";
+    private const string RunValue = "FluentWSnip";
     private static readonly Guid ScreenshotsFolder = new("b7bede81-df94-4682-a7d8-57a52620b86f");
 
     public unsafe string DefaultScreenshotFolder
@@ -28,14 +28,14 @@ public sealed class WindowsShellService : IShellService
             {
                 // KF_FLAG_CREATE, so a fresh profile gets the folder the shell would create.
                 if (Native.SHGetKnownFolderPath(&folder, 0x8000, 0, &path) >= 0 && path != null)
-                    return new string(path);
+                    return Path.Combine(new string(path), "FluentWSnip");
             }
             finally
             {
                 Native.CoTaskMemFree(path);
             }
 
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots");
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots", "FluentWSnip");
         }
     }
 
@@ -58,7 +58,7 @@ public sealed class WindowsShellService : IShellService
     {
         string query = WindowsPackage.IsPackaged
             ? "registeredAUMID=" + Uri.EscapeDataString(Package.Current.Id.FamilyName + "!App")
-            : "registeredAppMachine=WSnip";
+            : "registeredAppMachine=FluentWSnip";
         try
         {
             Process.Start(new ProcessStartInfo("ms-settings:defaultapps?" + query)

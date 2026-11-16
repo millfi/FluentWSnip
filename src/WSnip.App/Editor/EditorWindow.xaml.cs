@@ -61,12 +61,12 @@ public partial class EditorWindow : AppWindowBase
     {
         this.controller = controller;
         InitializeComponent();
-        Title = "WSnip";
+        Title = "FluentWSnip";
         SetSize(1280, 840);
         SetMinimumSize(720, 480);
         Canvas.WindowHandle = PixelSwatch.WindowHandle = Handle;
         colorEditor.SetOwner(Handle);
-        Canvas.RenderingFailed += (_, e) => MessageDialog.Show(this, "WSnip", e.Message);
+        Canvas.RenderingFailed += (_, e) => MessageDialog.Show(this, "FluentWSnip", e.Message);
         tools = [PenTool, HighlighterTool, EraserTool, CropTool];
 
         // Items are data shown through templates, so the selected item follows theme changes
@@ -572,7 +572,7 @@ public partial class EditorWindow : AppWindowBase
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             AppLog.Error("Editor", "Copying failed.", exception);
-            MessageDialog.Show(IsVisible ? this : null, "WSnip", string.Format(AppStrings.CopyFailed, exception.Message));
+            MessageDialog.Show(IsVisible ? this : null, "FluentWSnip", string.Format(AppStrings.CopyFailed, exception.Message));
         }
         finally
         {
@@ -628,7 +628,7 @@ public partial class EditorWindow : AppWindowBase
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             AppLog.Error("Editor", $"Saving {path} failed.", exception);
-            MessageDialog.Show(IsVisible ? this : null, "WSnip", string.Format(AppStrings.SaveFailed, exception.Message));
+            MessageDialog.Show(IsVisible ? this : null, "FluentWSnip", string.Format(AppStrings.SaveFailed, exception.Message));
             UpdateStatus();
         }
         finally
@@ -655,7 +655,7 @@ public partial class EditorWindow : AppWindowBase
         ZoomButton.IsEnabled = has;
         SavedLink.Visibility = (savedPath is not null) ? Visibility.Visible : Visibility.Collapsed;
         SavedText.Text = savedPath is null ? null : Path.GetFileName(savedPath);
-        Title = document is null ? "WSnip" : string.Format(AppStrings.EditorTitle, SnipExporter.DefaultFileName(document.CapturedAt, SnipFormat.Png)[..^4]);
+        Title = document is null ? "FluentWSnip" : string.Format(AppStrings.EditorTitle, SnipExporter.DefaultFileName(document.CapturedAt, SnipFormat.Png)[..^4]);
         UpdateZoomLabel();
         UpdateStatus();
     }

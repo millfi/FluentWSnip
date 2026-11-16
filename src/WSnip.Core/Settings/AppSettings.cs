@@ -32,7 +32,7 @@ public sealed class AppSettings
 
     public bool AutoSave { get; set; } = true;
 
-    /// <summary>Folder for automatically saved snips; null uses the system screenshot folder.</summary>
+    /// <summary>Folder for automatically saved snips; null uses the application's default screenshot folder.</summary>
     public string? SaveFolder { get; set; }
 
     /// <summary>Format for snips without HDR content.</summary>

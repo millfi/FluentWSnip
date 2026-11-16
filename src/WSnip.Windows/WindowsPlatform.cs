@@ -7,7 +7,7 @@ namespace WSnip.Windows;
 [SupportedOSPlatform("windows10.0.19041.0")]
 public static class WindowsPlatform
 {
-    public const string AppId = "LightStudio.WSnip";
+    public const string AppId = "LightStudio.FluentWSnip";
 
     public static PlatformServices Create() => new()
     {

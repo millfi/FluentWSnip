@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <AssemblyName>WSnip</AssemblyName>
+    <AssemblyName>FluentWSnip</AssemblyName>
     <RootNamespace>WSnip.App</RootNamespace>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
@@ -39,6 +39,6 @@
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
   <Target Name="RequireWindowsArchitecture" BeforeTargets="PrepareForBuild">
-    <Error Condition="'$(Platform)' != 'x64' and '$(Platform)' != 'ARM64'" Text="Build WSnip with -p:Platform=x64 or -p:Platform=ARM64." />
+    <Error Condition="'$(Platform)' != 'x64' and '$(Platform)' != 'ARM64'" Text="Build FluentWSnip with -p:Platform=x64 or -p:Platform=ARM64." />
   </Target>
 </Project>

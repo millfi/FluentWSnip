@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <!-- Required on Windows for window transparency (Mica) and correct per-monitor scaling. -->
-  <assemblyIdentity version="0.1.0.0" name="WSnip"/>
+  <assemblyIdentity version="0.1.0.0" name="FluentWSnip"/>
 
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>

@@ -122,7 +122,7 @@ public static class UltraHdrJpegWriter
     }
 
     private static string PrimaryXmp(int gainMapLength) =>
-        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"WSnip\">" +
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"FluentWSnip\">" +
         "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">" +
         "<rdf:Description rdf:about=\"\"" +
         " xmlns:hdrgm=\"http://ns.adobe.com/hdr-gain-map/1.0/\"" +

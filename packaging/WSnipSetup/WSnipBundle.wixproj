@@ -4,12 +4,12 @@
     <OutputType>Bundle</OutputType>
     <InstallerArchitecture Condition="'$(InstallerArchitecture)' == ''">x64</InstallerArchitecture>
     <InstallerPlatform>$(InstallerArchitecture)</InstallerPlatform>
-    <BundleUpgradeCode>7cf88276-b25b-413c-889f-44556f982849</BundleUpgradeCode>
+    <BundleUpgradeCode>b7eb3d74-e9f6-4e76-92cf-dac79b993d60</BundleUpgradeCode>
     <InstallerVersion Condition="'$(InstallerVersion)' == ''">$(Version)</InstallerVersion>
-    <MsiPath Condition="'$(MsiPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\windows-installer\$(InstallerArchitecture)\msi\WSnip-$(InstallerArchitecture).msi</MsiPath>
+    <MsiPath Condition="'$(MsiPath)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\fluent-windows-installer\$(InstallerArchitecture)\msi\FluentWSnip-$(InstallerArchitecture).msi</MsiPath>
     <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\release\</OutputPath>
-    <IntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\obj\WSnipSetup\bundle\$(InstallerArchitecture)\</IntermediateOutputPath>
-    <OutputName>WSnipSetup-$(InstallerArchitecture)</OutputName>
+    <IntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\obj\FluentWSnipSetup\bundle\$(InstallerArchitecture)\</IntermediateOutputPath>
+    <OutputName>FluentWSnipSetup-$(InstallerArchitecture)</OutputName>
     <DefaultCompressionLevel>high</DefaultCompressionLevel>
     <DefineConstants>$(DefineConstants);InstallerVersion=$(InstallerVersion);BundleUpgradeCode=$(BundleUpgradeCode);MsiPath=$(MsiPath);IconPath=$(MSBuildThisFileDirectory)..\..\src\WSnip.App\Assets\wsnip.ico;LicensePath=$(LicensePath)</DefineConstants>
   </PropertyGroup>

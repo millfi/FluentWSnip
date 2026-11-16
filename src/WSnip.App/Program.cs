@@ -13,7 +13,7 @@ internal static class Program
     {
         WinRT.ComWrappersSupport.InitializeComWrappers();
         var platform = WindowsPlatform.Create();
-        AppLog.Configure(writeToConsole: false, Path.Combine(platform.DataDirectory, "logs", "wsnip.log"));
+        AppLog.Configure(writeToConsole: false, Path.Combine(platform.DataDirectory, "logs", "fluentwsnip.log"));
         try
         {
             if (WindowsPackage.IsStartupActivation()) args = [.. args, "--background"];
@@ -37,7 +37,7 @@ internal static class Program
         }
         catch (Exception exception)
         {
-            AppLog.Critical("Startup", "WSnip terminated unexpectedly.", exception);
+            AppLog.Critical("Startup", "FluentWSnip terminated unexpectedly.", exception);
             throw;
         }
         finally { AppLog.Shutdown(); }

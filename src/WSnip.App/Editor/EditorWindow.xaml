@@ -26,7 +26,7 @@
    <editor:SnipCanvas x:Name="Canvas" Visibility="Collapsed" />
    <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" MaxWidth="520" Margin="24">
     <FontIcon Glyph="&#xE8A7;" FontSize="56" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-    <TextBlock Text="WSnip" FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Center" />
+    <TextBlock Text="FluentWSnip" FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Center" />
     <TextBlock x:Name="EmptyHint" TextAlignment="Center" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
    </StackPanel>
    <Canvas x:Name="PixelInfoLayer" IsHitTestVisible="False">

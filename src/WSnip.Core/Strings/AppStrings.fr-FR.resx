@@ -4,7 +4,7 @@
   <resheader name="version"><value>2.0</value></resheader>
   <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
-  <data name="SettingsTitle" xml:space="preserve"><value>Paramètres de WSnip</value></data>
+  <data name="SettingsTitle" xml:space="preserve"><value>Paramètres de FluentWSnip</value></data>
   <data name="Settings" xml:space="preserve"><value>Paramètres</value></data>
   <data name="TakingSnips" xml:space="preserve"><value>Prise de captures</value></data>
   <data name="Shortcut" xml:space="preserve"><value>Raccourci</value></data>
@@ -62,7 +62,7 @@
   <data name="SaveAsTip" xml:space="preserve"><value>Enregistrer sous (Ctrl+S)</value></data>
   <data name="More" xml:space="preserve"><value>Plus</value></data>
   <data name="OpenFolder" xml:space="preserve"><value>Ouvrir le dossier des captures</value></data>
-  <data name="ExitWSnip" xml:space="preserve"><value>Quitter WSnip</value></data>
+  <data name="ExitWSnip" xml:space="preserve"><value>Quitter FluentWSnip</value></data>
   <data name="AddColor" xml:space="preserve"><value>Ajouter une couleur</value></data>
   <data name="PickColorTip" xml:space="preserve"><value>Prélever une couleur de la capture, y compris le HDR et les couleurs étendues (Échap pour arrêter)</value></data>
   <data name="PickColor" xml:space="preserve"><value>Prélever une couleur de la capture</value></data>
@@ -92,8 +92,8 @@
   <data name="ThemeSystem" xml:space="preserve"><value>Suivre le système</value></data>
   <data name="ThemeLight" xml:space="preserve"><value>Clair</value></data>
   <data name="ThemeDark" xml:space="preserve"><value>Sombre</value></data>
-  <data name="SystemShortcutsCaption" xml:space="preserve"><value>Attribuez des raccourcis aux actions de capture de WSnip dans les paramètres du système.</value></data>
-  <data name="About" xml:space="preserve"><value>WSnip {0}. Les captures HDR conservent leurs hautes lumières et leurs couleurs étendues ; les applications sans prise en charge du HDR affichent la version SDR.</value></data>
+  <data name="SystemShortcutsCaption" xml:space="preserve"><value>Attribuez des raccourcis aux actions de capture de FluentWSnip dans les paramètres du système.</value></data>
+  <data name="About" xml:space="preserve"><value>FluentWSnip {0}. Les captures HDR conservent leurs hautes lumières et leurs couleurs étendues ; les applications sans prise en charge du HDR affichent la version SDR.</value></data>
   <data name="UnavailableFormats" xml:space="preserve"><value>Formats indisponibles : {0}.</value></data>
   <data name="HotkeyRefusal" xml:space="preserve"><value>{0} Choisissez une autre combinaison.</value></data>
   <data name="SaveFolderTitle" xml:space="preserve"><value>Dossier des captures enregistrées</value></data>
@@ -120,8 +120,8 @@
   <data name="SaveSnip" xml:space="preserve"><value>Enregistrer la capture</value></data>
   <data name="Saving" xml:space="preserve"><value>Enregistrement…</value></data>
   <data name="SaveFailed" xml:space="preserve"><value>Impossible d'enregistrer la capture.&#xA;&#xA;{0}</value></data>
-  <data name="EditorTitle" xml:space="preserve"><value>WSnip — {0}</value></data>
-  <data name="NoSystemHotkeyHint" xml:space="preserve"><value>Sélectionnez Nouveau pour capturer l'écran ou attribuez un raccourci à l'action Nouvelle capture de WSnip dans les paramètres du système.</value></data>
+  <data name="EditorTitle" xml:space="preserve"><value>FluentWSnip — {0}</value></data>
+  <data name="NoSystemHotkeyHint" xml:space="preserve"><value>Sélectionnez Nouveau pour capturer l'écran ou attribuez un raccourci à l'action Nouvelle capture de FluentWSnip dans les paramètres du système.</value></data>
   <data name="NoHotkey" xml:space="preserve"><value>un raccourci (aucun défini)</value></data>
   <data name="HotkeyErrorHint" xml:space="preserve"><value>Sélectionnez Nouveau pour capturer l'écran. {0} Choisissez un autre raccourci dans les Paramètres.</value></data>
   <data name="HotkeyHint" xml:space="preserve"><value>Appuyez sur {0} depuis n'importe où ou sélectionnez Nouveau pour capturer l'écran. Le contenu HDR et les couleurs étendues sont préservés.</value></data>
@@ -147,9 +147,9 @@
   <data name="FullscreenPurpose" xml:space="preserve"><value>les captures plein écran</value></data>
   <data name="FreeformPurpose" xml:space="preserve"><value>les captures de forme libre</value></data>
   <data name="WholeWindowPurpose" xml:space="preserve"><value>les captures de fenêtre entière</value></data>
-  <data name="OpenWSnip" xml:space="preserve"><value>Ouvrir WSnip</value></data>
+  <data name="OpenWSnip" xml:space="preserve"><value>Ouvrir FluentWSnip</value></data>
   <data name="Exit" xml:space="preserve"><value>Quitter</value></data>
-  <data name="OverlayTitle" xml:space="preserve"><value>Superposition WSnip</value></data>
+  <data name="OverlayTitle" xml:space="preserve"><value>Superposition FluentWSnip</value></data>
   <data name="ModeDescription" xml:space="preserve"><value>{0} : {1}</value></data>
   <data name="CancelTip" xml:space="preserve"><value>Annuler (Échap)</value></data>
   <data name="OK" xml:space="preserve"><value>OK</value></data>
@@ -170,8 +170,8 @@
   <data name="AvifFormat" xml:space="preserve"><value>AVIF (carte de gain)</value></data>
   <data name="ScreenshotName" xml:space="preserve"><value>Capture d'écran {0}</value></data>
   <data name="InvalidPath" xml:space="preserve"><value>Chemin non valide.</value></data>
-  <data name="MissingPipeWire" xml:space="preserve"><value>WSnip capture l'écran via PipeWire, qui n'est pas installé sur ce système. Installez PipeWire et le portail de partage d'écran de votre bureau, tel que xdg-desktop-portal-kde ou xdg-desktop-portal-gnome, puis reconnectez-vous.</value></data>
-  <data name="MissingPortal" xml:space="preserve"><value>WSnip capture l'écran via le portail de partage d'écran du bureau, qui n'est pas disponible dans cette session. Installez xdg-desktop-portal avec le portail de votre bureau, tel que xdg-desktop-portal-kde ou xdg-desktop-portal-gnome, ainsi que PipeWire, puis reconnectez-vous.</value></data>
+  <data name="MissingPipeWire" xml:space="preserve"><value>FluentWSnip capture l'écran via PipeWire, qui n'est pas installé sur ce système. Installez PipeWire et le portail de partage d'écran de votre bureau, tel que xdg-desktop-portal-kde ou xdg-desktop-portal-gnome, puis reconnectez-vous.</value></data>
+  <data name="MissingPortal" xml:space="preserve"><value>FluentWSnip capture l'écran via le portail de partage d'écran du bureau, qui n'est pas disponible dans cette session. Installez xdg-desktop-portal avec le portail de votre bureau, tel que xdg-desktop-portal-kde ou xdg-desktop-portal-gnome, ainsi que PipeWire, puis reconnectez-vous.</value></data>
   <data name="UnsupportedKey" xml:space="preserve"><value>La touche '{0}' n'est pas prise en charge.</value></data>
   <data name="HotkeyUsed" xml:space="preserve"><value>{0} est déjà utilisé par une autre application ou par Windows.</value></data>
   <data name="HotkeyRegistrationFailed" xml:space="preserve"><value>Impossible d'enregistrer {0} (erreur {1}).</value></data>
@@ -196,14 +196,14 @@
   <data name="KWinConnectionFailed" xml:space="preserve"><value>La connexion à KWin a échoué : {0}.</value></data>
   <data name="ErrorCode" xml:space="preserve"><value>erreur {0}</value></data>
   <data name="KWinWaitFailed" xml:space="preserve"><value>L'attente de KWin a échoué (erreur {0}).</value></data>
-  <data name="KWinUnavailable" xml:space="preserve"><value>KWin ne propose plus {0} à WSnip.</value></data>
+  <data name="KWinUnavailable" xml:space="preserve"><value>KWin ne propose plus {0} à FluentWSnip.</value></data>
   <data name="PipeWireConnectFailed" xml:space="preserve"><value>PipeWire n'a pas pu se connecter à l'écran partagé (erreur {0}).</value></data>
   <data name="PipeWireNoFrame" xml:space="preserve"><value>L'écran partagé n'a fourni aucune image (nœud PipeWire {0}).</value></data>
   <data name="PipeWireLoopFailed" xml:space="preserve"><value>PipeWire n'a pas pu créer une boucle de thread.</value></data>
   <data name="PipeWireStartFailed" xml:space="preserve"><value>PipeWire n'a pas pu démarrer.</value></data>
   <data name="PipeWireStreamFailed" xml:space="preserve"><value>Le flux PipeWire du nœud {0} a échoué : {1}.</value></data>
   <data name="PipeWireStreamEnded" xml:space="preserve"><value>Le flux PipeWire du nœud {0} s'est terminé.</value></data>
-  <data name="PipeWireFormatUnsupported" xml:space="preserve"><value>Le flux PipeWire du nœud {0} a choisi un format que WSnip ne peut pas lire.</value></data>
+  <data name="PipeWireFormatUnsupported" xml:space="preserve"><value>Le flux PipeWire du nœud {0} a choisi un format que FluentWSnip ne peut pas lire.</value></data>
   <data name="PipeWireCreateStreamFailed" xml:space="preserve"><value>PipeWire n'a pas pu créer de flux pour le nœud {0}.</value></data>
   <data name="PipeWireConnectNodeFailed" xml:space="preserve"><value>PipeWire n'a pas pu se connecter au nœud {0} (erreur {1}).</value></data>
   <data name="PixelFormatUnsupported" xml:space="preserve"><value>Le format de pixel {0} n'est pas pris en charge.</value></data>

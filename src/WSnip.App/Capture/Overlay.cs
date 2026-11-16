@@ -219,7 +219,7 @@ internal sealed class OverlayWindow : AppWindowBase
         MakeOverlay();
         AppWindow.MoveAndResize(new RectInt32(monitor.Bounds.X, monitor.Bounds.Y, monitor.Bounds.Width, monitor.Bounds.Height));
         surface = new OverlaySurface(session, monitor) { WindowHandle = Handle, FixedDisplay = monitor.Color };
-        surface.RenderingFailed += (_, e) => { session.Cancel(); MessageDialog.Show(null, "WSnip", e.Message); };
+        surface.RenderingFailed += (_, e) => { session.Cancel(); MessageDialog.Show(null, "FluentWSnip", e.Message); };
         var root = new Grid(); root.Children.Add(surface);
         if (showBar)
             root.Children.Add(new SnipModeBar(session.Mode, session.SetMode, session.Cancel)

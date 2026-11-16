@@ -11,7 +11,7 @@
   <data name="ColorSpace" xml:space="preserve"><value>Colour space</value></data>
   <data name="BrightnessTip" xml:space="preserve"><value>Multiples of SDR white. Above 1&#xD7; the colour is HDR: brighter than white on an HDR display, and kept in HDR files.</value></data>
   <data name="AdaptiveDescription" xml:space="preserve"><value>Highlights roll off smoothly around HDR content while the rest of the screen keeps its exact colours.</value></data>
-  <data name="About" xml:space="preserve"><value>WSnip {0}. HDR snips keep their highlights and wide colours; the SDR version is what apps without HDR support show.</value></data>
+  <data name="About" xml:space="preserve"><value>FluentWSnip {0}. HDR snips keep their highlights and wide colours; the SDR version is what apps without HDR support show.</value></data>
   <data name="EditColor" xml:space="preserve"><value>Edit colour</value></data>
   <data name="RemoveColor" xml:space="preserve"><value>Remove colour</value></data>
   <data name="NewColor" xml:space="preserve"><value>New colour</value></data>

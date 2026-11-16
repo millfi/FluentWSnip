@@ -14,12 +14,12 @@
     packaging/Set-Version.ps1 stamps Version from the release tag or Directory.Build.props.
   -->
   <Identity
-    Name="LightStudio.WSnip"
+    Name="LightStudio.FluentWSnip"
     Publisher="CN=Light Studio, O=Light Studio, C=US"
     Version="0.1.0.0" />
 
   <Properties>
-    <DisplayName>WSnip</DisplayName>
+    <DisplayName>FluentWSnip</DisplayName>
     <PublisherDisplayName>David Huang</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
@@ -33,30 +33,29 @@
   </Resources>
 
   <Applications>
-    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
-      <uap:VisualElements DisplayName="WSnip" Description="HDR and wide color screenshot tool" BackgroundColor="transparent" Square150x150Logo="Images\Square150x150Logo.png" Square44x44Logo="Images\Square44x44Logo.png">
+    <Application Id="App" Executable="FluentWSnip.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="FluentWSnip" Description="HDR and wide color screenshot tool" BackgroundColor="transparent" Square150x150Logo="Images\Square150x150Logo.png" Square44x44Logo="Images\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Images\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Images\SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
-        <uap:Extension Category="windows.protocol" Executable="WSnip.exe" EntryPoint="Windows.FullTrustApplication">
+        <uap:Extension Category="windows.protocol" Executable="FluentWSnip.exe" EntryPoint="Windows.FullTrustApplication">
           <uap:Protocol Name="ms-screenclip">
-            <uap:DisplayName>WSnip</uap:DisplayName>
+            <uap:DisplayName>FluentWSnip</uap:DisplayName>
           </uap:Protocol>
         </uap:Extension>
         <!--
           Package registry writes are private to the package, so "Start with Windows" uses this task
           instead of the Run key (WindowsShellService.StartupTaskId); such launches start in the tray.
-          The packaging tools resolve $targetnametoken$ on the Application only, so extensions name the
-          entry point project's folder in the package.
+          Executable paths are explicit so development tools can resolve this separate app too.
         -->
-        <desktop:Extension Category="windows.startupTask" Executable="WSnip.exe" EntryPoint="Windows.FullTrustApplication">
-          <desktop:StartupTask TaskId="WSnipStartup" Enabled="false" DisplayName="WSnip" />
+        <desktop:Extension Category="windows.startupTask" Executable="FluentWSnip.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="FluentWSnipStartup" Enabled="false" DisplayName="FluentWSnip" />
         </desktop:Extension>
-        <!-- Keeps WSnip.exe, with or without its snip switch, working from Run, scripts and shortcuts. -->
-        <uap5:Extension Category="windows.appExecutionAlias" Executable="WSnip.exe" EntryPoint="Windows.FullTrustApplication">
+        <!-- Keeps FluentWSnip.exe, with or without its snip switch, working from Run, scripts and shortcuts. -->
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="FluentWSnip.exe" EntryPoint="Windows.FullTrustApplication">
           <uap5:AppExecutionAlias>
-            <uap5:ExecutionAlias Alias="WSnip.exe" />
+            <uap5:ExecutionAlias Alias="FluentWSnip.exe" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
       </Extensions>

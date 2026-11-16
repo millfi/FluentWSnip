@@ -2,12 +2,15 @@
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <ProjectReference Include="..\..\src\WSnip.Core\WSnip.Core.csproj" />
+    <ProjectReference Include="..\..\src\WSnip.Windows\WSnip.Windows.csproj" />
     <Compile Include="..\..\src\WSnip.App\Rendering\SharedImage.cs" Link="SharedImage.cs" />
     <Compile Include="..\..\src\WSnip.App\Rendering\SnipDrawing.cs" Link="SnipDrawing.cs" />
   </ItemGroup>

@@ -31,6 +31,7 @@
   <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.props" />
   <PropertyGroup>
     <ProjectGuid>d339fe29-590e-48cb-b15a-5e5fdeccab44</ProjectGuid>
+    <ProjectName>FluentWSnipMSIX</ProjectName>
     <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <DefaultLanguage>en-US</DefaultLanguage>

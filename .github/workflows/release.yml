@@ -32,7 +32,7 @@ jobs:
     runs-on: windows-2025-vs2026
     steps:
       # The projects find Light Player at ..\LightPlayer, so both repositories are checked out side by side.
-      - name: Checkout WSnip
+      - name: Checkout FluentWSnip
         uses: actions/checkout@v4
         with:
           path: WSnip
@@ -62,7 +62,7 @@ jobs:
         shell: pwsh
         run: |
           $version = & "$env:GITHUB_WORKSPACE\WSnip\packaging\Set-Version.ps1" -Tag $env:RELEASE_TAG
-          Write-Host "Packaging WSnip $version"
+          Write-Host "Packaging FluentWSnip $version"
 
       - name: Test HDR presentation
         shell: pwsh
@@ -88,7 +88,7 @@ jobs:
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           $project = Join-Path $env:GITHUB_WORKSPACE 'WSnip\packaging\WSnipMSIX\WSnipMSIX.wapproj'
-          $packageRoot = Join-Path $env:GITHUB_WORKSPACE 'WSnip\artifacts\msix\AppPackages'
+          $packageRoot = Join-Path $env:GITHUB_WORKSPACE 'WSnip\artifacts\fluent-msix\AppPackages'
           $certificatePath = Join-Path $env:GITHUB_WORKSPACE 'WSnip\packaging\WSnipMSIX\WSnipMSIX_TemporaryKey.pfx'
 
           # Supplying this as an environment property preserves the semicolon as a runtime-list
@@ -120,7 +120,7 @@ jobs:
       - name: Archive complete MSIX sideload package
         shell: pwsh
         run: |
-          $packageRoot = Join-Path $env:GITHUB_WORKSPACE 'WSnip\artifacts\msix\AppPackages'
+          $packageRoot = Join-Path $env:GITHUB_WORKSPACE 'WSnip\artifacts\fluent-msix\AppPackages'
           $packageFolders = @(Get-ChildItem $packageRoot -Directory -Filter '*_Test')
           if ($packageFolders.Count -ne 1) {
             throw "Expected exactly one MSIX sideload package folder, found $($packageFolders.Count)."
@@ -144,7 +144,7 @@ jobs:
 
           $releaseDirectory = Join-Path $env:GITHUB_WORKSPACE 'WSnip\artifacts\release'
           New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
-          Compress-Archive -LiteralPath $packageFolder.FullName -DestinationPath (Join-Path $releaseDirectory 'WSnipMSIX.zip')
+          Compress-Archive -LiteralPath $packageFolder.FullName -DestinationPath (Join-Path $releaseDirectory 'FluentWSnipMSIX.zip')
 
       - name: Remove signing certificate from the runner
         if: always()
@@ -165,7 +165,7 @@ jobs:
     name: Build Windows setup executables
     runs-on: windows-2025-vs2026
     steps:
-      - name: Checkout WSnip
+      - name: Checkout FluentWSnip
         uses: actions/checkout@v4
         with:
           path: WSnip
@@ -187,7 +187,7 @@ jobs:
         shell: pwsh
         run: |
           $version = & "$env:GITHUB_WORKSPACE\WSnip\packaging\Set-Version.ps1" -Tag $env:RELEASE_TAG
-          Write-Host "Packaging WSnip $version"
+          Write-Host "Packaging FluentWSnip $version"
 
       # Self-contained WinUI publishes for x64 and ARM64; WiX is restored through its MSBuild SDK.
       - name: Install LLVM for native binding generation
@@ -201,7 +201,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-windows-setup
-          path: WSnip/artifacts/release/WSnipSetup-*.exe
+          path: WSnip/artifacts/release/FluentWSnipSetup-*.exe
           if-no-files-found: error
           retention-days: 1
 
@@ -223,7 +223,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: WSnip ${{ env.RELEASE_TAG }}
+          name: FluentWSnip ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |

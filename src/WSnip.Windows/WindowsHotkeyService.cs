@@ -24,7 +24,7 @@ public sealed unsafe class WindowsHotkeyService : IGlobalHotkeyService
 
     public WindowsHotkeyService()
     {
-        thread = new Thread(Run) { IsBackground = true, Name = "WSnip hotkeys" };
+        thread = new Thread(Run) { IsBackground = true, Name = "FluentWSnip hotkeys" };
         thread.Start();
     }
 
