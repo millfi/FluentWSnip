@@ -1,0 +1,3 @@
+[submodule "external/LightPlayer"]
+	path = external/LightPlayer
+	url = https://github.com/hjc4869/LightPlayer.git

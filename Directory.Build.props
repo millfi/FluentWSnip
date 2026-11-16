@@ -18,9 +18,8 @@
     <!-- Keep the original WSnip development package layout untouched. -->
     <ArtifactsProjectName Condition="'$(MSBuildProjectName)' == 'WSnip.App'">FluentWSnip</ArtifactsProjectName>
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
-    <!-- Shared Light Player sources and build scripts. -->
-    <LightPlayerRoot Condition="'$(LightPlayerRoot)' == ''">$(MSBuildThisFileDirectory)..\LightPlayer\</LightPlayerRoot>
-    <LightPlayerRoot Condition="!Exists('$(LightPlayerRoot)Directory.Packages.props') and Exists('$(MSBuildThisFileDirectory).deps/LightPlayer/Directory.Packages.props')">$(MSBuildThisFileDirectory).deps/LightPlayer/</LightPlayerRoot>
+    <!-- Pinned shared sources; explicit LightPlayerRoot overrides remain supported. -->
+    <LightPlayerRoot Condition="'$(LightPlayerRoot)' == ''">$(MSBuildThisFileDirectory)external/LightPlayer/</LightPlayerRoot>
     <UseAvaloniaFork>false</UseAvaloniaFork>
     <NativeBindingsPolicy>$(LightPlayerRoot)build/NativeBindings.Configuration.targets</NativeBindingsPolicy>
   </PropertyGroup>

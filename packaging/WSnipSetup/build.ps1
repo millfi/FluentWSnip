@@ -8,7 +8,7 @@ param(
 
     [string] $Version,
 
-    # Light Player checkout that provides shared sources and package configuration; defaults to ..\LightPlayer.
+    # Optional override; the default dependency is the recorded external/LightPlayer submodule.
     [string] $LightPlayerRoot
 )
 

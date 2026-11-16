@@ -7,6 +7,10 @@ viewers restore the original brightness.
 
 FluentWSnip is a Windows-only application built with WinUI 3 (Windows App SDK).
 
+Developer documentation (日本語): [implementation map and architecture](docs/architecture.md),
+[build, validation and distribution](docs/development.md).
+New coding sessions can start from [AGENTS.md](AGENTS.md).
+
 ## Running alongside WSnip
 
 FluentWSnip installs and runs independently of the original WSnip:
@@ -72,7 +76,8 @@ handler for `ms-screenclip`, and both apps remain available as independent choic
     Snipping Tool file names ("Screenshot 2026-09-30 101530.png").
   - Save as offers every format.
 - **Look:** Modern Windows styles and controls; light and dark themes; the system accent color;
-  and an optional Mica backdrop on Windows 11.
+  and an optional Mica backdrop on Windows 11. Capture mode toolbars use acrylic and follow the
+  app's light, dark or system theme selection.
 
 ## Localization
 
@@ -160,7 +165,7 @@ need not fall by exactly the released pixel byte count.
   theme/backdrop integration, and FP16 image presentation.
 - `WSnip.Windows`: Windows.Graphics.Capture, display color information, native window picking,
   global hotkeys, clipboard, single-instance forwarding, and shell integration.
-- `WSnip.Core`: capture models, annotation history, tone mapping, HDR/WCG analysis, and encoders.
+- `WSnip.Core`: capture models, annotations, tone mapping, HDR/WCG analysis, and encoders.
 
 The image pipeline keeps linear scRGB data, including negative wide-gamut components and values
 above SDR white. `HdrSurface` draws through a premultiplied FP16 Skia surface into a Win2D
@@ -175,13 +180,12 @@ Requirements: Windows 10 2004 or later (Mica requires Windows 11), .NET 10 SDK, 
 for packaged development runs, and LLVM/libclang for the shared FFmpeg binding generator.
 Visual Studio 2026's Windows application packaging tools are needed for the legacy `.wapproj`.
 
-The application continues to use Light Player's logging and FFmpeg shim. Check it out beside this
-repository as `../LightPlayer`, or inside `.deps/LightPlayer` (ignored by Git), or pass an absolute
-`-p:LightPlayerRoot=...` ending in a directory separator. NuGet restore fetches the FFmpeg release
-package from Light Player's public release feed. There are no Avalonia runtime dependencies.
+Light Player is pinned as a Git submodule at external/LightPlayer. Initialize it after cloning
+with git submodule update --init --recursive. An explicit LightPlayerRoot property can override
+the path for parallel development. There are no Avalonia runtime dependencies.
 
 ```powershell
-git clone https://github.com/hjc4869/LightPlayer.git .deps/LightPlayer
+git submodule update --init --recursive
 dotnet build WSnip.slnx -p:Platform=x64
 winapp run src/WSnip.App/WSnip.App.csproj --arch x64 -p Platform=x64
 ```
@@ -215,8 +219,7 @@ an unpackaged self-contained WinUI publish, including the Windows App SDK runtim
 configuration remains the default for development and distribution.
 
 The release workflow builds Windows x64/ARM64 MSIX and setup artifacts only. Signing still uses
-`WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`; the optional
-`LIGHTPLAYER_REF` repository variable selects the shared dependency revision.
+`WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`; the recorded submodule commit selects the shared dependency revision.
 
 ## Files
 
