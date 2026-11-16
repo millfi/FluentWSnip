@@ -68,10 +68,6 @@ public class HdrSurface : Grid, IDisposable
     protected virtual bool CacheRaster => false;
     /// <summary>Coalesces pointer updates at composition cadence, without a blocking vblank wait per window.</summary>
     protected virtual bool SynchronizeWithComposition => false;
-#if DEBUG
-    internal event Action<double>? FramePresented;
-    internal int RasterUploadCount { get; private set; }
-#endif
     protected double RasterScale => XamlRoot?.RasterizationScale ?? 1;
     private void RootChanged(XamlRoot sender, XamlRootChangedEventArgs e) => InvalidateVisual();
     private void RefreshDisplay()
@@ -98,13 +94,7 @@ public class HdrSurface : Grid, IDisposable
         if (disposed || !IsLoaded || Visibility != Visibility.Visible || ActualWidth <= 0 || ActualHeight <= 0) return;
         try
         {
-#if DEBUG
-            long started = System.Diagnostics.Stopwatch.GetTimestamp();
-#endif
             DrawFrame();
-#if DEBUG
-            FramePresented?.Invoke(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-#endif
         }
         catch (COMException exception) when (device?.IsDeviceLost(exception.HResult) == true)
         {
@@ -173,9 +163,6 @@ public class HdrSurface : Grid, IDisposable
             else
                 bitmap.SetPixelBytes(pixels!);
             rasterValid = true;
-#if DEBUG
-            RasterUploadCount++;
-#endif
             if (CacheRaster) ReleaseRaster();
         }
         using (var ds = swapChain.CreateDrawingSession(Microsoft.UI.Colors.Transparent))

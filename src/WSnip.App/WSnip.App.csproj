@@ -33,8 +33,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\tests\Fixtures\PresentationFixture.cs" Link="Rendering\PresentationFixture.cs" Condition="'$(Configuration)' == 'Debug'" />
-    <Compile Include="..\..\tests\Fixtures\OverlayPerformanceFixture.cs" Link="Capture\OverlayPerformanceFixture.cs" Condition="'$(Configuration)' == 'Debug'" />
-    <Compile Include="..\..\tests\Fixtures\OverlayDrawingFixture.cs" Link="Capture\OverlayDrawingFixture.cs" Condition="'$(Configuration)' == 'Debug'" />
     <Content Include="Assets\wsnip.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\packaging\WSnipMSIX\Images\*.png" Link="Images\%(Filename)%(Extension)" />
     <PRIResource Include="..\..\packaging\WSnipMSIX\Resources.resw" Link="Resources.resw" />
