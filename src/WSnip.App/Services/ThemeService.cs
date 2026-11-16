@@ -11,7 +11,7 @@ namespace WSnip.App.Services;
 public sealed class ThemeService(IWindowIntegrationService windows) : IDisposable
 {
     private readonly List<AppWindowBase> attached = [];
-    private readonly Dictionary<AppWindowBase,(ThemeSettings Settings,TypedEventHandler<ThemeSettings,object> Changed)> themes = [];
+    private readonly Dictionary<AppWindowBase,(ThemeSettings Settings,TypedEventHandler<ThemeSettings,object> Changed,bool ManageShellBackdrop)> themes = [];
     private ThemePreference preference;
     private bool micaEnabled = true;
     public bool IsMicaSupported => windows.IsMicaSupported;
@@ -20,12 +20,13 @@ public sealed class ThemeService(IWindowIntegrationService windows) : IDisposabl
         preference=theme; micaEnabled=mica;
         foreach(var window in attached.ToArray()) Apply(window);
     }
-    public void Attach(AppWindowBase window)
+    /// <param name="manageShellBackdrop">False for capture windows that supply their own image or acrylic background.</param>
+    public void Attach(AppWindowBase window, bool manageShellBackdrop = true)
     {
         attached.Add(window);
         var theme=ThemeSettings.CreateForWindowId(window.AppWindow.Id);
         TypedEventHandler<ThemeSettings,object> changed=(_,_) => window.DispatcherQueue.TryEnqueue(() => { if(!window.IsClosed) Apply(window); });
-        themes.Add(window,(theme,changed));
+        themes.Add(window,(theme,changed,manageShellBackdrop));
         theme.Changed+=changed;
         window.Closed+=(_,_) => Detach(window);
         if(window.Content is FrameworkElement root) root.ActualThemeChanged+=(_,_) => ApplyFrame(window);
@@ -40,7 +41,12 @@ public sealed class ThemeService(IWindowIntegrationService windows) : IDisposabl
     {
         if(window.Content is FrameworkElement root)
             root.RequestedTheme=preference switch {ThemePreference.Light=>ElementTheme.Light,ThemePreference.Dark=>ElementTheme.Dark,_=>ElementTheme.Default};
-        bool mica=micaEnabled && IsMicaSupported && themes.TryGetValue(window,out var theme) && !theme.Settings.HighContrast;
+        if (!themes.TryGetValue(window, out var theme) || !theme.ManageShellBackdrop)
+        {
+            ApplyFrame(window);
+            return;
+        }
+        bool mica=micaEnabled && IsMicaSupported && !theme.Settings.HighContrast;
         if(window.Content is Panel panel)
         {
             panel.ClearValue(Panel.BackgroundProperty);

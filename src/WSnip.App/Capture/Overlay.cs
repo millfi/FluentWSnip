@@ -33,6 +33,7 @@ public sealed class OverlaySession : IDisposable
 {
     private readonly ScreenSnapshot snapshot;
     private readonly bool placeWindows;
+    private readonly ThemeService theme;
     private readonly List<OverlayWindow> windows = [];
     private readonly TaskCompletionSource<SnipSelection?> result = new();
     private PixelPoint? anchor;
@@ -41,10 +42,11 @@ public sealed class OverlaySession : IDisposable
     private bool finished;
 
     /// <param name="placeWindows">Whether windows can be placed on each display, rather than by the compositor.</param>
-    public OverlaySession(ScreenSnapshot snapshot, SnipMode mode, bool placeWindows)
+    public OverlaySession(ScreenSnapshot snapshot, SnipMode mode, bool placeWindows, ThemeService theme)
     {
         this.snapshot = snapshot;
         this.placeWindows = placeWindows;
+        this.theme = theme;
         Mode = mode;
     }
 
@@ -69,7 +71,11 @@ public sealed class OverlaySession : IDisposable
         {
             UpdateHover(pointer);
             foreach (MonitorCapture monitor in snapshot.Monitors)
-                windows.Add(new OverlayWindow(this, monitor, monitor == barMonitor));
+            {
+                var window = new OverlayWindow(this, monitor, monitor == barMonitor);
+                windows.Add(window);
+                theme.Attach(window, manageShellBackdrop: false);
+            }
 
             OverlayWindow[] overlays = windows.ToArray();
             bool[] ready = await Task.WhenAll(overlays.Select(window => window.PrepareAsync()));
@@ -363,9 +369,8 @@ internal sealed class OverlaySurface : HdrSurface
 
 internal sealed class SnipModeBar : UserControl
 {
-    public SnipModeBar(SnipMode selected, Action<SnipMode> select, Action cancel)
+    public SnipModeBar(SnipMode selected, Action<SnipMode> select, Action cancel, bool useDesktopBackdrop = false)
     {
-        RequestedTheme = ElementTheme.Dark;
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         var buttons = new List<ToggleButton>();
         foreach (var option in SnipModeOption.All)
@@ -384,8 +389,8 @@ internal sealed class SnipModeBar : UserControl
         close.Click += (_, _) => cancel(); panel.Children.Add(close);
         Content = new Border
         {
-            Background = new SolidColorBrush(Microsoft.UI.Colors.Black),
-            CornerRadius = new CornerRadius(8), Padding = new Thickness(8), Child = panel,
+            Style = (Style)Application.Current.Resources[useDesktopBackdrop ? "DesktopSnipModeBarStyle" : "SnipModeBarStyle"],
+            Child = panel,
         };
     }
 }
@@ -396,7 +401,8 @@ internal sealed class WholeWindowToolbar : AppWindowBase
     public WholeWindowToolbar(PixelPoint pointer, bool placeWindow, Action cancel)
     {
         Title = AppStrings.OverlayTitle; MakeOverlay();
-        Content = new SnipModeBar(SnipMode.WholeWindow, mode => { if(mode != SnipMode.WholeWindow) { RequestedMode = mode; cancel(); } }, cancel);
+        Content = new SnipModeBar(SnipMode.WholeWindow, mode => { if(mode != SnipMode.WholeWindow) { RequestedMode = mode; cancel(); } }, cancel, useDesktopBackdrop: true);
+        SystemBackdrop = new DesktopAcrylicBackdrop();
         var display = Microsoft.UI.Windowing.DisplayArea.GetFromPoint(pointer,Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
         Position = new PointInt32(display.OuterBounds.X + display.OuterBounds.Width / 2 - 180,display.OuterBounds.Y + 24);
         SetSize(380,64);

@@ -166,7 +166,7 @@ public sealed class AppController : IDisposable
 
                 using ScreenSnapshot snapshot = await platform.Capture.CaptureAsync(new CaptureOptions { IncludeCursor = Settings.IncludeCursor });
                 platform.Windows.TryGetCursorPosition(out int x, out int y);
-                using var session = new OverlaySession(snapshot, initialMode, placeWindows: platform.Windows.CanPlaceWindows);
+                using var session = new OverlaySession(snapshot, initialMode, placeWindows: platform.Windows.CanPlaceWindows, theme: Theme);
                 SnipSelection? selection = await session.ShowAsync(new PixelPoint(x, y));
 
                 // A mode picked on the overlay's own bar becomes the default for the next snip.
@@ -437,6 +437,7 @@ public sealed class AppController : IDisposable
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
             platform.Windows.TryGetCursorPosition(out int x, out int y);
             toolbar = new WholeWindowToolbar(new PixelPoint(x, y), platform.Windows.CanPlaceWindows, cancellation.Cancel);
+            Theme.Attach(toolbar, manageShellBackdrop: false);
             toolbar.Show();
             try
             {
