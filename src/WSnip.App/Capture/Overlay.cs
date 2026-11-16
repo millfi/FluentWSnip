@@ -1,4 +1,6 @@
 using Microsoft.UI.Input;
+using Microsoft.Graphics.Canvas;
+using System.Numerics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -126,14 +128,16 @@ public sealed class OverlaySession : IDisposable
 
         if (Mode == SnipMode.Rectangle)
         {
-            selection = PixelRect.FromEdges(Math.Min(start.X, point.X), Math.Min(start.Y, point.Y),
+            var next = PixelRect.FromEdges(Math.Min(start.X, point.X), Math.Min(start.Y, point.Y),
                 Math.Max(start.X, point.X), Math.Max(start.Y, point.Y));
+            if (selection == next) return;
+            selection = next;
         }
         else if (Mode == SnipMode.Freeform && outline is not null)
         {
             (double lastX, double lastY) = outline[^1];
-            if (Math.Abs(point.X + 0.5 - lastX) + Math.Abs(point.Y + 0.5 - lastY) >= 2)
-                outline.Add((point.X + 0.5, point.Y + 0.5));
+            if (Math.Abs(point.X + 0.5 - lastX) + Math.Abs(point.Y + 0.5 - lastY) < 2) return;
+            outline.Add((point.X + 0.5, point.Y + 0.5));
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
@@ -209,8 +213,9 @@ internal sealed class OverlayWindow : AppWindowBase
 {
     private readonly OverlaySession session;
     private readonly OverlaySurface surface;
-    private readonly DispatcherTimer follow = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private bool pressed;
+    private PixelRect? previousSelection;
+    private bool previousFreeform;
     public MonitorCapture Monitor { get; }
     public OverlayWindow(OverlaySession session, MonitorCapture monitor, bool showBar)
     {
@@ -235,31 +240,50 @@ internal sealed class OverlayWindow : AppWindowBase
             pressed = true;
             surface.CapturePointer(e.Pointer);
             session.PointerPressed(Pointer(e.GetCurrentPoint(surface).Position));
-            follow.Start(); e.Handled = true;
+            CompositionTarget.Rendering += FollowPointer; e.Handled = true;
         };
         surface.PointerMoved += (_, e) => session.PointerMoved(Pointer(e.GetCurrentPoint(surface).Position));
         surface.PointerReleased += (_, e) =>
         {
             if (!pressed) return;
-            pressed = false; follow.Stop();
+            pressed = false; CompositionTarget.Rendering -= FollowPointer;
             var point = Pointer(e.GetCurrentPoint(surface).Position);
             surface.ReleasePointerCapture(e.Pointer);
             session.PointerReleased(point); e.Handled = true;
         };
         surface.PointerCanceled += (_, _) => session.Cancel();
-        surface.PointerCaptureLost += (_, _) => { if (pressed) { pressed = false; follow.Stop(); session.Cancel(); } };
+        surface.PointerCaptureLost += (_, _) => { if (pressed) { pressed = false; CompositionTarget.Rendering -= FollowPointer; session.Cancel(); } };
         root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, e) => { if (e.Key == VirtualKey.Escape) { session.Cancel(); e.Handled = true; } }), true);
-        follow.Tick += (_, _) => { if (App.Platform!.Windows.TryGetCursorPosition(out int x,out int y)) session.PointerMoved(new PixelPoint(x,y)); };
         session.Changed += SessionChanged;
         Opened += (_, _) => AppWindow.MoveAndResize(new RectInt32(monitor.Bounds.X,monitor.Bounds.Y,monitor.Bounds.Width,monitor.Bounds.Height));
-        Closed += (_, _) => { follow.Stop(); session.Changed -= SessionChanged; surface.Dispose(); session.Cancel(); };
+        Closed += (_, _) => { CompositionTarget.Rendering -= FollowPointer; session.Changed -= SessionChanged; surface.Dispose(); session.Cancel(); };
+    }
+    private void FollowPointer(object? sender, object args)
+    {
+        if (App.Platform!.Windows.TryGetCursorPosition(out int x, out int y)) session.PointerMoved(new PixelPoint(x, y));
     }
     private PixelPoint Pointer(Point local)
     {
         if (App.Platform!.Windows.TryGetCursorPosition(out int x,out int y)) return new PixelPoint(x,y);
         return new PixelPoint(Monitor.Bounds.X + (int)(local.X * RenderScaling), Monitor.Bounds.Y + (int)(local.Y * RenderScaling));
     }
-    private void SessionChanged(object? sender, EventArgs e) => surface.InvalidateVisual();
+    private void SessionChanged(object? sender, EventArgs e)
+    {
+        PixelRect? next = session.Selection;
+        // Other displays retain their already-dimmed frame when the rectangle never touches them.
+        bool freeform = session.Mode == SnipMode.Freeform;
+        bool affected = previousFreeform || freeform || TouchesMonitor(previousSelection) || TouchesMonitor(next);
+        previousSelection = next;
+        previousFreeform = freeform;
+        if (affected) surface.InvalidateVisual();
+    }
+    private bool TouchesMonitor(PixelRect? rectangle)
+    {
+        if (rectangle is not { } rect) return false;
+        int margin = (int)Math.Ceiling(2 * RenderScaling);
+        return !PixelRect.FromEdges(rect.X - margin, rect.Y - margin, rect.Right + margin, rect.Bottom + margin)
+            .Intersect(Monitor.Bounds).IsEmpty;
+    }
 }
 
 internal sealed class OverlaySurface : HdrSurface
@@ -267,38 +291,35 @@ internal sealed class OverlaySurface : HdrSurface
     private readonly OverlaySession session;
     private readonly MonitorCapture monitor;
     private readonly SharedImage image;
+    protected override bool CacheRaster => true;
+    protected override bool SynchronizeWithComposition => true;
     public OverlaySurface(OverlaySession session, MonitorCapture monitor)
     {
         this.session = session; this.monitor = monitor;
         image = SharedImage.FromLinear(monitor.Image,monitor.Color.WhiteScale);
         ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Cross);
     }
-    private SKPoint Local(double x,double y) => new((float)((x-monitor.Bounds.X)/RasterScale),(float)((y-monitor.Bounds.Y)/RasterScale));
+    private Vector2 Local(double x,double y) => new((float)((x-monitor.Bounds.X)/RasterScale),(float)((y-monitor.Bounds.Y)/RasterScale));
     protected override void Draw(SKCanvas canvas)
     {
         var area = new SKRect(0,0,(float)ActualWidth,(float)ActualHeight);
         SnipDrawing.Draw(canvas,image,area,[],false,Surface.ReferenceWhiteScale,false);
-        using var builder = new SKPathBuilder();
+    }
+    protected override void DrawOverlay(CanvasDrawingSession canvas)
+    {
+        List<Vector2>? points = null;
         if (session.Mode == SnipMode.Freeform && session.Outline is { Count: >= 2 } outline)
         {
-            builder.MoveTo(Local(outline[0].X,outline[0].Y));
-            foreach (var point in outline.Skip(1)) builder.LineTo(Local(point.X,point.Y));
-            builder.Close();
+            points = new List<Vector2>(outline.Count);
+            foreach (var point in outline) points.Add(Local(point.X, point.Y));
         }
-        else if (session.Selection is { Width: > 0, Height: > 0 } rect)
+        Rect? rectangle = null;
+        if (session.Selection is { Width: > 0, Height: > 0 } rect)
         {
             var a=Local(rect.X,rect.Y); var b=Local(rect.Right,rect.Bottom);
-            builder.AddRect(new SKRect(a.X,a.Y,b.X,b.Y));
+            rectangle = new Rect(a.X, a.Y, b.X - a.X, b.Y - a.Y);
         }
-        using var hole = builder.Detach();
-        using var dim = new SKPaint { Color = new SKColor(0,0,0,144) };
-        canvas.Save(); canvas.ClipPath(hole,SKClipOperation.Difference); canvas.DrawRect(area,dim); canvas.Restore();
-        using var shadow = new SKPaint { Color = new SKColor(0,0,0,160),Style = SKPaintStyle.Stroke,StrokeWidth = 3.5f,IsAntialias = true };
-        canvas.DrawPath(hole,shadow);
-        using var linear = SKColorSpace.CreateSrgbLinear();
-        using var border = new SKPaint { Style = SKPaintStyle.Stroke,StrokeWidth = 1.5f,IsAntialias = true };
-        border.SetColor(new SKColorF(1,1,1,1),linear);
-        canvas.DrawPath(hole,border);
+        OverlayDrawing.Draw(canvas, new Rect(0, 0, ActualWidth, ActualHeight), rectangle, points, (float)Surface.ReferenceWhiteScale);
     }
     public override void Dispose() { image.Release(); base.Dispose(); }
 }

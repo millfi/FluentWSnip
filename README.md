@@ -242,6 +242,23 @@ Release builds. Actual HDR appearance still requires a suitable display and Wind
 Two additional isolation tests verify independent instance locks and command forwarding for WSnip
 and FluentWSnip.
 
+The frozen-screen overlay uploads its HDR background once per display and draws the selection
+and dimming on the GPU. Pointer updates are coalesced at composition cadence; displays outside
+the changing rectangle retain their existing frame. The editor's editable image rendering is separate.
+
+Close FluentWSnip, then measure this path with a synthetic 3840×2160 HDR image in a Debug build
+(no desktop capture, settings changes, or image exports):
+
+```powershell
+winapp run src/WSnip.App/WSnip.App.csproj --arch x64 -p Platform=x64 -- --overlay-benchmark "$PWD/artifacts/overlay-benchmark.json"
+```
+
+The fixture exits after 120 measured frames and writes timing, upload counts, and GPU readback
+checks for HDR/negative gamut, dimming, cross-display selection, and SDR-white border brightness.
+It also releases and recreates the background once to check buffer recovery. For real pointer
+input against the same synthetic image, use `--overlay-interaction-fixture <output.json>`;
+the result records the selection (or cancellation), without saving a screenshot.
+
 ## Known limitations
 
 - Whole-window snips retain a window's own transparency. Rounded corners and whole-window

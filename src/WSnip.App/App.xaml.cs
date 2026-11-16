@@ -19,6 +19,9 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+#if DEBUG
+        if (Capture.OverlayPerformanceFixture.RunIfRequested(this, Arguments)) return;
+#endif
         var platform = Platform ?? throw new InvalidOperationException("Platform services were not configured.");
         Controller = new AppController(this, platform, new SettingsStore(Path.Combine(platform.DataDirectory, "settings.json")));
         Controller.Start(Arguments);

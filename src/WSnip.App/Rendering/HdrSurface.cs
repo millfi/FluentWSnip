@@ -3,6 +3,7 @@ using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using SkiaSharp;
 using Windows.Graphics.DirectX;
 using WSnip.App.Services;
@@ -30,7 +31,7 @@ public class HdrSurface : Grid, IDisposable
     private byte[]? pixels;
     private int width, height;
     private double pixelScale;
-    private bool queued, disposed, allowFloat = true;
+    private bool queued, disposed, allowFloat = true, rasterValid;
     private DisplayColorInfo display = DisplayColorInfo.Sdr;
     private XamlRoot? observedRoot;
     private bool failed;
@@ -63,6 +64,14 @@ public class HdrSurface : Grid, IDisposable
     public SurfaceColorInfo Surface { get; private set; }
     public event EventHandler? SurfaceChanged;
     public event EventHandler<Exception>? RenderingFailed;
+    /// <summary>A frozen background is rasterized/uploaded once; interactive decoration stays on the GPU.</summary>
+    protected virtual bool CacheRaster => false;
+    /// <summary>Coalesces pointer updates at composition cadence, without a blocking vblank wait per window.</summary>
+    protected virtual bool SynchronizeWithComposition => false;
+#if DEBUG
+    internal event Action<double>? FramePresented;
+    internal int RasterUploadCount { get; private set; }
+#endif
     protected double RasterScale => XamlRoot?.RasterizationScale ?? 1;
     private void RootChanged(XamlRoot sender, XamlRootChangedEventArgs e) => InvalidateVisual();
     private void RefreshDisplay()
@@ -77,25 +86,39 @@ public class HdrSurface : Grid, IDisposable
     {
         if (queued || disposed || failed) return;
         queued = true;
-        DispatcherQueue.TryEnqueue(() =>
-        {
+        if (SynchronizeWithComposition)
+            CompositionTarget.Rendering += RenderQueuedFrame;
+        else if (!DispatcherQueue.TryEnqueue(() => RenderQueuedFrame(null, null)))
             queued = false;
-            if (disposed || !IsLoaded || Visibility != Visibility.Visible || ActualWidth <= 0 || ActualHeight <= 0) return;
-            try { DrawFrame(); }
-            catch (COMException exception) when (device?.IsDeviceLost(exception.HResult) == true)
-            {
-                ReleaseBuffers();
-                device?.Dispose();
-                device = null;
-                InvalidateVisual();
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
-            {
-                failed = true;
-                LightStudio.Logging.AppLog.Error("Rendering", "Presenting the image failed.", exception);
-                RenderingFailed?.Invoke(this, exception);
-            }
-        });
+    }
+    private void RenderQueuedFrame(object? sender, object? args)
+    {
+        if (SynchronizeWithComposition) CompositionTarget.Rendering -= RenderQueuedFrame;
+        queued = false;
+        if (disposed || !IsLoaded || Visibility != Visibility.Visible || ActualWidth <= 0 || ActualHeight <= 0) return;
+        try
+        {
+#if DEBUG
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
+            DrawFrame();
+#if DEBUG
+            FramePresented?.Invoke(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+#endif
+        }
+        catch (COMException exception) when (device?.IsDeviceLost(exception.HResult) == true)
+        {
+            ReleaseBuffers();
+            device?.Dispose();
+            device = null;
+            InvalidateVisual();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            failed = true;
+            LightStudio.Logging.AppLog.Error("Rendering", "Presenting the image failed.", exception);
+            RenderingFailed?.Invoke(this, exception);
+        }
     }
     private void DrawFrame()
     {
@@ -131,29 +154,50 @@ public class HdrSurface : Grid, IDisposable
             var skInfo = new SKImageInfo(w, h, fp16 ? SKColorType.RgbaF16 : SKColorType.Bgra8888, SKAlphaType.Premul, colorSpace);
             raster = SKSurface.Create(skInfo, Marshal.UnsafeAddrOfPinnedArrayElement(pixels, 0), skInfo.RowBytes)
                 ?? throw new InvalidOperationException("The image presentation surface could not be created.");
-            bitmap = CanvasBitmap.CreateFromBytes(device, pixels, w, h, format, (float)(96 * scale), CanvasAlphaMode.Premultiplied);
             if (Surface != info) { Surface = info; SurfaceChanged?.Invoke(this, EventArgs.Empty); }
         }
-        var canvas = raster!.Canvas;
-        canvas.Clear(SKColors.Transparent);
-        canvas.Save();
-        try
+        if (!CacheRaster || !rasterValid)
         {
-            canvas.Scale((float)scale);
-            Draw(canvas);
+            var canvas = raster!.Canvas;
+            canvas.Clear(SKColors.Transparent);
+            canvas.Save();
+            try
+            {
+                canvas.Scale((float)scale);
+                Draw(canvas);
+            }
+            finally { canvas.Restore(); }
+            canvas.Flush();
+            if (bitmap is null)
+                bitmap = CanvasBitmap.CreateFromBytes(device, pixels!, w, h, swapChain.Format, (float)(96 * scale), CanvasAlphaMode.Premultiplied);
+            else
+                bitmap.SetPixelBytes(pixels!);
+            rasterValid = true;
+#if DEBUG
+            RasterUploadCount++;
+#endif
+            if (CacheRaster) ReleaseRaster();
         }
-        finally { canvas.Restore(); }
-        canvas.Flush();
-        bitmap!.SetPixelBytes(pixels!);
-        using (var ds = swapChain.CreateDrawingSession(Microsoft.UI.Colors.Transparent)) ds.DrawImage(bitmap);
-        swapChain.Present();
+        using (var ds = swapChain.CreateDrawingSession(Microsoft.UI.Colors.Transparent))
+        {
+            ds.DrawImage(bitmap);
+            DrawOverlay(ds);
+        }
+        if (SynchronizeWithComposition) swapChain.Present(0);
+        else swapChain.Present();
     }
     protected virtual void Draw(SKCanvas canvas) { }
+    protected virtual void DrawOverlay(CanvasDrawingSession drawingSession) { }
     public void ReleaseBuffers()
     {
         panel.SwapChain = null;
         bitmap?.Dispose(); bitmap = null;
         swapChain?.Dispose(); swapChain = null;
+        ReleaseRaster();
+        rasterValid = false;
+    }
+    private void ReleaseRaster()
+    {
         raster?.Dispose(); raster = null;
         colorSpace?.Dispose(); colorSpace = null;
         pixels = null;
@@ -162,6 +206,7 @@ public class HdrSurface : Grid, IDisposable
     {
         if (disposed) return;
         disposed = true;
+        if (SynchronizeWithComposition) CompositionTarget.Rendering -= RenderQueuedFrame;
         displayTimer.Stop();
         if (observedRoot is not null) observedRoot.Changed -= RootChanged;
         observedRoot = null;
