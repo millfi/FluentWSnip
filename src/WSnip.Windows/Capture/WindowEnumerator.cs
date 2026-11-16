@@ -72,6 +72,20 @@ internal static unsafe class WindowEnumerator
         return handles;
     }
 
+    /// <summary>The picker controls, captured before its noninteractive dimming windows are created.</summary>
+    public static List<nint> OwnVisibleWindows()
+    {
+        uint self = (uint)Environment.ProcessId;
+        var handles = new List<nint>();
+        foreach (nint handle in TopLevelWindows())
+        {
+            uint process;
+            Native.GetWindowThreadProcessId(handle, &process);
+            if (process == self && Native.IsWindowVisible(handle)) handles.Add(handle);
+        }
+        return handles;
+    }
+
     private static bool IsCandidate(nint handle, uint self, nint shell, char* buffer, out uint processId, out PixelRect frame)
     {
         processId = 0;

@@ -33,7 +33,8 @@ handler for `ms-screenclip`, and both apps remain available as independent choic
   delay and an option to include the cursor. The screen freezes behind one borderless overlay per
   display. Change mode from the overlay's bar; press Esc or right-click to cancel.
 - **Whole window mode:** the screen stays live and FluentWSnip's own windows step aside. The pointer
-  turns into a crosshair everywhere and the next click picks the window under it; the click does
+  turns into a crosshair, with the hovered window outlined and everything outside it dimmed.
+  The next click picks the window under it; the click does
   not reach that window. The window is read from the compositor whole, including parts covered by
   other windows and its own per-pixel transparency, so the snip has no desktop behind it. Esc or
   right-click cancels, and FluentWSnip's windows come back either way.

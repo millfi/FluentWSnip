@@ -29,6 +29,8 @@ public sealed unsafe class WindowsWindowPicker : IWindowPickerService
     private const uint Escape = 0x1B;
     private const uint Picked = Native.WmApp + 1;
     private const uint Cancelled = Native.WmApp + 2;
+    private const uint HoverChanged = Native.WmApp + 3;
+    private const uint MouseMove = 0x0200, Timer = 0x0113;
     private const uint ReloadCursors = 0x0057;
     private const int CrossCursor = 32515;
 
@@ -66,6 +68,8 @@ public sealed unsafe class WindowsWindowPicker : IWindowPickerService
     private static void Run(Session session)
     {
         nint mouse = 0, keyboard = 0;
+        nuint timer = 0;
+        LiveWindowHighlight? highlight = null;
         CapturedWindow? picked = null;
         Exception? failure = null;
         try
@@ -73,25 +77,46 @@ public sealed unsafe class WindowsWindowPicker : IWindowPickerService
             Msg message;
             Native.PeekMessage(&message, 0, 0, 0, 0);
             session.Start(Native.GetCurrentThreadId());
+            // Enumerating displays can be slow on a cold graphics driver; do it before installing hooks.
+            highlight = new LiveWindowHighlight();
             nint module = Native.GetModuleHandle(null);
             mouse = Native.SetWindowsHookEx(MouseHook, &OnMouse, module, 0);
             keyboard = Native.SetWindowsHookEx(KeyboardHook, &OnKeyboard, module, 0);
             if (mouse == 0 || keyboard == 0)
                 throw new InvalidOperationException(string.Format(AppStrings.PointerWatchFailed, Marshal.GetLastPInvokeError()));
             ReplaceCursors();
+            UpdateHighlight();
+            timer = Native.SetTimer(0, 0, 50, 0); // Also follows windows moving beneath a stationary pointer.
+            if (timer == 0) throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError());
 
             while (Native.GetMessage(&message, 0, 0, 0) > 0)
             {
                 if (message.Message == Cancelled)
                     break;
-                if (message.Message != Picked)
+                if (message.Message == HoverChanged || (message.Message == Timer && message.WParam == timer))
+                {
+                    if (message.Message == HoverChanged) session.HoverQueued = false;
+                    UpdateHighlight();
                     continue;
+                }
+                if (message.Message != Picked)
+                {
+                    Native.TranslateMessage(&message);
+                    Native.DispatchMessage(&message);
+                    continue;
+                }
 
                 int x = (int)message.WParam, y = (int)message.LParam;
                 picked = WindowEnumerator.WindowAt(x, y);
                 if (picked is not null)
                     break;
                 AppLog.Information("Picker", $"No window to capture at {x},{y}; still picking.");
+            }
+
+            void UpdateHighlight()
+            {
+                Point pointer;
+                if (Native.GetCursorPos(&pointer)) highlight.Update(WindowEnumerator.WindowAt(pointer.X, pointer.Y)?.Bounds);
             }
 
         }
@@ -105,6 +130,8 @@ public sealed unsafe class WindowsWindowPicker : IWindowPickerService
                 Native.UnhookWindowsHookEx(mouse);
             if (keyboard != 0)
                 Native.UnhookWindowsHookEx(keyboard);
+            if (timer != 0) Native.KillTimer(0, timer);
+            highlight?.Dispose();
             RestoreCursors();
             Interlocked.CompareExchange(ref current, null, session);
             if (failure is not null)
@@ -122,6 +149,13 @@ public sealed unsafe class WindowsWindowPicker : IWindowPickerService
             var info = (MouseHookInfo*)data;
             switch ((uint)message)
             {
+                case MouseMove:
+                    if (!session.HoverQueued)
+                    {
+                        session.HoverQueued = true;
+                        session.Post(HoverChanged);
+                    }
+                    break;
                 case LeftButtonDown:
                     uint processId;
                     Native.GetWindowThreadProcessId(Native.WindowFromPoint(info->Point), &processId);
@@ -191,6 +225,7 @@ public sealed unsafe class WindowsWindowPicker : IWindowPickerService
 
         /// <summary>Where the left button went down, in physical desktop pixels; touched on the picker thread only.</summary>
         public (int X, int Y)? PressedAt { get; set; }
+        public bool HoverQueued { get; set; }
 
         public void Start(uint id)
         {

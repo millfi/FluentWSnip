@@ -365,8 +365,6 @@ internal sealed class SnipModeBar : UserControl
 {
     public SnipModeBar(SnipMode selected, Action<SnipMode> select, Action cancel)
     {
-        Background = new SolidColorBrush(Microsoft.UI.Colors.Black);
-        CornerRadius = new CornerRadius(8); Padding = new Thickness(8);
         RequestedTheme = ElementTheme.Dark;
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         var buttons = new List<ToggleButton>();
@@ -383,7 +381,12 @@ internal sealed class SnipModeBar : UserControl
         AutomationProperties.SetName(close,AppStrings.Cancel);
         AutomationProperties.SetAutomationId(close,"CancelSnip");
         ToolTipService.SetToolTip(close,AppStrings.CancelTip);
-        close.Click += (_, _) => cancel(); panel.Children.Add(close); Content = panel;
+        close.Click += (_, _) => cancel(); panel.Children.Add(close);
+        Content = new Border
+        {
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Black),
+            CornerRadius = new CornerRadius(8), Padding = new Thickness(8), Child = panel,
+        };
     }
 }
 

@@ -41,6 +41,18 @@ internal struct Msg
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal unsafe struct WindowClassEx
+{
+    public uint Size, Style;
+    public delegate* unmanaged<nint, uint, nuint, nint, nint> WindowProcedure;
+    public int ClassExtra, WindowExtra;
+    public nint Instance, Icon, Cursor, Background;
+    public char* MenuName;
+    public char* ClassName;
+    public nint SmallIcon;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct Luid
 {
     public uint Low;
@@ -197,6 +209,66 @@ internal struct KeyboardHookInfo
 
 internal static unsafe partial class Native
 {
+    [LibraryImport("user32.dll", EntryPoint = "RegisterClassExW", SetLastError = true)]
+    public static partial ushort RegisterClassEx(WindowClassEx* definition);
+
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", SetLastError = true)]
+    public static partial nint CreateWindowEx(uint extendedStyle, char* className, char* title, uint style,
+        int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
+
+    [LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
+    public static partial nint DefWindowProc(nint window, uint message, nuint wParam, nint lParam);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DestroyWindow(nint window);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ShowWindow(nint window, int command);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UpdateWindow(nint window);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetLayeredWindowAttributes(nint window, uint colorKey, byte alpha, uint flags);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    public static partial int SetWindowRgn(nint window, nint region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetWindowRect(nint window, Rect* rectangle);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool TranslateMessage(Msg* message);
+
+    [LibraryImport("user32.dll", EntryPoint = "DispatchMessageW")]
+    public static partial nint DispatchMessage(Msg* message);
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    public static partial nuint SetTimer(nint window, nuint id, uint interval, nint callback);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool KillTimer(nint window, nuint id);
+
+    [LibraryImport("gdi32.dll", SetLastError = true)]
+    public static partial nint CreateRectRgn(int left, int top, int right, int bottom);
+
+    [LibraryImport("gdi32.dll", SetLastError = true)]
+    public static partial int CombineRgn(nint destination, nint source, nint other, int mode);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DeleteObject(nint resource);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial nint GetStockObject(int objectId);
+
     public const uint MonitorInfoPrimary = 1;
     public const int ExtendedStyle = -20;
     public const long ToolWindowStyle = 0x80;
