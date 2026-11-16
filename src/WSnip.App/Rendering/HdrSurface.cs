@@ -35,6 +35,7 @@ public class HdrSurface : Grid, IDisposable
     private DisplayColorInfo display = DisplayColorInfo.Sdr;
     private XamlRoot? observedRoot;
     private bool failed;
+    private readonly TaskCompletionSource<bool> initialFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public HdrSurface()
     {
@@ -68,6 +69,8 @@ public class HdrSurface : Grid, IDisposable
     protected virtual bool CacheRaster => false;
     /// <summary>Coalesces pointer updates at composition cadence, without a blocking vblank wait per window.</summary>
     protected virtual bool SynchronizeWithComposition => false;
+    /// <summary>Whether the first swap-chain frame was presented; false if rendering failed or the surface closed.</summary>
+    internal Task<bool> InitialFrameReady => initialFrame.Task;
     protected double RasterScale => XamlRoot?.RasterizationScale ?? 1;
     private void RootChanged(XamlRoot sender, XamlRootChangedEventArgs e) => InvalidateVisual();
     private void RefreshDisplay()
@@ -82,7 +85,8 @@ public class HdrSurface : Grid, IDisposable
     {
         if (queued || disposed || failed) return;
         queued = true;
-        if (SynchronizeWithComposition)
+        // A cloaked overlay must be able to prepare its first frame without a visible-window render tick.
+        if (SynchronizeWithComposition && initialFrame.Task.IsCompleted)
             CompositionTarget.Rendering += RenderQueuedFrame;
         else if (!DispatcherQueue.TryEnqueue(() => RenderQueuedFrame(null, null)))
             queued = false;
@@ -95,6 +99,7 @@ public class HdrSurface : Grid, IDisposable
         try
         {
             DrawFrame();
+            initialFrame.TrySetResult(true);
         }
         catch (COMException exception) when (device?.IsDeviceLost(exception.HResult) == true)
         {
@@ -106,6 +111,7 @@ public class HdrSurface : Grid, IDisposable
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             failed = true;
+            initialFrame.TrySetResult(false);
             LightStudio.Logging.AppLog.Error("Rendering", "Presenting the image failed.", exception);
             RenderingFailed?.Invoke(this, exception);
         }
@@ -193,6 +199,7 @@ public class HdrSurface : Grid, IDisposable
     {
         if (disposed) return;
         disposed = true;
+        initialFrame.TrySetResult(false);
         if (SynchronizeWithComposition) CompositionTarget.Rendering -= RenderQueuedFrame;
         displayTimer.Stop();
         if (observedRoot is not null) observedRoot.Changed -= RootChanged;

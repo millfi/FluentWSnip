@@ -1,6 +1,7 @@
 using Microsoft.UI.Input;
 using Microsoft.Graphics.Canvas;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -60,20 +61,32 @@ public sealed class OverlaySession : IDisposable
 
     public bool IsDragging => anchor is not null;
 
-    public Task<SnipSelection?> ShowAsync(PixelPoint pointer)
+    public async Task<SnipSelection?> ShowAsync(PixelPoint pointer)
     {
         MonitorCapture barMonitor = snapshot.MonitorAt(pointer.X, pointer.Y)
             ?? snapshot.Monitors.FirstOrDefault(m => m.IsPrimary) ?? snapshot.Monitors[0];
-        foreach (MonitorCapture monitor in snapshot.Monitors)
+        try
         {
-            var window = new OverlayWindow(this, monitor, monitor == barMonitor);
-            windows.Add(window);
-            window.Show();
-        }
+            UpdateHover(pointer);
+            foreach (MonitorCapture monitor in snapshot.Monitors)
+                windows.Add(new OverlayWindow(this, monitor, monitor == barMonitor));
 
-        windows.FirstOrDefault(w => w.Monitor == barMonitor)?.Activate();
-        UpdateHover(pointer);
-        return result.Task;
+            OverlayWindow[] overlays = windows.ToArray();
+            bool[] ready = await Task.WhenAll(overlays.Select(window => window.PrepareAsync()));
+            if (!finished && ready.All(value => value))
+            {
+                // Reveal together only after every display has its frozen image and XAML ready.
+                foreach (OverlayWindow window in overlays) window.Reveal();
+                overlays.FirstOrDefault(window => window.Monitor == barMonitor)?.Activate();
+            }
+            else Finish(null);
+            return await result.Task;
+        }
+        catch
+        {
+            Finish(null);
+            throw;
+        }
     }
 
     /// <summary>Redraws the windows after one of them changed what it shows.</summary>
@@ -211,6 +224,8 @@ public sealed class OverlaySession : IDisposable
 
 internal sealed class OverlayWindow : AppWindowBase
 {
+    private const uint DwmTransitionsForceDisabled = 3;
+    private const uint DwmCloak = 13;
     private readonly OverlaySession session;
     private readonly OverlaySurface surface;
     private bool pressed;
@@ -220,6 +235,8 @@ internal sealed class OverlayWindow : AppWindowBase
     public OverlayWindow(OverlaySession session, MonitorCapture monitor, bool showBar)
     {
         this.session = session; Monitor = monitor;
+        SetDwmFlag(DwmCloak, true); // Compose while keeping the initial window off screen.
+        SetDwmFlag(DwmTransitionsForceDisabled, true); // Reveal the frozen screen without a fade.
         Title = AppStrings.OverlayTitle;
         MakeOverlay();
         AppWindow.MoveAndResize(new RectInt32(monitor.Bounds.X, monitor.Bounds.Y, monitor.Bounds.Width, monitor.Bounds.Height));
@@ -255,9 +272,29 @@ internal sealed class OverlayWindow : AppWindowBase
         surface.PointerCaptureLost += (_, _) => { if (pressed) { pressed = false; CompositionTarget.Rendering -= FollowPointer; session.Cancel(); } };
         root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, e) => { if (e.Key == VirtualKey.Escape) { session.Cancel(); e.Handled = true; } }), true);
         session.Changed += SessionChanged;
-        Opened += (_, _) => AppWindow.MoveAndResize(new RectInt32(monitor.Bounds.X,monitor.Bounds.Y,monitor.Bounds.Width,monitor.Bounds.Height));
         Closed += (_, _) => { CompositionTarget.Rendering -= FollowPointer; session.Changed -= SessionChanged; surface.Dispose(); session.Cancel(); };
     }
+    public async Task<bool> PrepareAsync()
+    {
+        // Show without activation so XAML can load/layout, while DWM keeps the window cloaked.
+        AppWindow.Show(activateWindow: false);
+        AppWindow.MoveAndResize(new RectInt32(Monitor.Bounds.X, Monitor.Bounds.Y, Monitor.Bounds.Width, Monitor.Bounds.Height));
+        if (!await surface.InitialFrameReady || IsClosed) return false;
+        await Compositor.RequestCommitAsync();
+        return !IsClosed;
+    }
+    public void Reveal()
+    {
+        if (!IsClosed) SetDwmFlag(DwmCloak, false);
+    }
+    private void SetDwmFlag(uint attribute, bool enabled)
+    {
+        int value = enabled ? 1 : 0;
+        Marshal.ThrowExceptionForHR(DwmSetWindowAttribute(Handle, attribute, ref value, sizeof(int)));
+    }
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(nint window, uint attribute, ref int value, uint size);
+
     private void FollowPointer(object? sender, object args)
     {
         if (App.Platform!.Windows.TryGetCursorPosition(out int x, out int y)) session.PointerMoved(new PixelPoint(x, y));
