@@ -90,6 +90,7 @@ winapp run src/WSnip.App/WSnip.App.csproj --arch x64 -c Debug -p Platform=x64 --
 | 変更対象 | 画面で確認すること |
 | --- | --- |
 | 凍結オーバーレイ | 開始前の白いフラッシュがない、矩形ドラッグが滑らか、表示倍率・複数画面をまたぐ選択、確定時の座標、Esc / 右クリック。 |
+| モード切り替え・終了 | エディターやトレイのない `--snip fullscreen` 起動から「ウィンドウ全体」と往復し、再度ホットキーを押さず選択を続けられる。キャンセル後は通常の終了条件に従って終了する。 |
 | ライブの「ウィンドウ全体」 | ホバー先だけ明るい、枠が追従する、ツールバーを操作できる、クリックが選択先アプリに届かない、キャンセル後に暗幕とカーソルが残らない。 |
 | テーマ・素材 | アプリの Light / Dark / System、通常選択と「ウィンドウ全体」の両ツールバー、アイコンの可読性、アクリルの表示とフォールバック。 |
 | エディター | ペン・蛍光ペン・消しゴム、クロップと undo / redo、ズーム・パン、HDR / SDR 切替、表示先モニターの変更。 |
@@ -160,6 +161,7 @@ MSIX の identity、alias、startup task、バージョンを変える場合は�
 | 共有ターゲットが見つからない | `LightPlayerRoot`、共有チェックアウト、ルートの props / targets。 |
 | FFmpeg の生成・取得で失敗 | libclang、NuGet キャッシュと GitHub release asset の取得、共有 `NativeBindings` のログ。同時に別のビルドを走らせていないか。 |
 | 起動したはずの変更が見えない | 同じ名前の古いプロセスへ引数転送されていないか、Debug / Release、パッケージの登録先と `AppX/`。 |
+| モード切り替えで選択が終わる | `App.DispatcherShutdownMode` が `OnExplicitShutdown` か。最後の選択ウィンドウの Close と、`AppController` のキャプチャ継続・終了判定。 |
 | 設定・ログが見つからない | `WindowsPackage.IsPackaged`。開発登録もパッケージ identity を持つため、単に Debug だから `%APPDATA%` とは限らない。 |
 | キャプチャ開始前に白くなる | `OverlayWindow.PrepareAsync`、`HdrSurface.InitialFrameReady`、compositor commit より先に表示していないか。 |
 | 矩形選択が低 FPS | 背景の再描画・転送回数、composition にまとめた更新、モニターごとの不要な更新。 |

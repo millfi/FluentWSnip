@@ -14,6 +14,9 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        // Mode switches can close every selection window before the next one is ready.
+        // AppController decides when capture, background work and the application have ended.
+        DispatcherShutdownMode = Microsoft.UI.Xaml.DispatcherShutdownMode.OnExplicitShutdown;
         UnhandledException += (_, e) => LightStudio.Logging.AppLog.Critical("UI", e.Message, e.Exception);
     }
 

@@ -26,7 +26,7 @@ flowchart LR
 | ファイル | 主な責務・探す型やメソッド |
 | --- | --- |
 | [Program.cs](../src/WSnip.App/Program.cs) | エントリーポイント。WinRT 初期化、ログ、パッケージからの起動引数、二重起動時の引数転送、WinUI の UI スレッドを準備する。 |
-| [App.xaml.cs](../src/WSnip.App/App.xaml.cs) | `App.OnLaunched` で `AppController` と設定ストアを作成。Debug の表示フィクスチャの入口もここ。 |
+| [App.xaml.cs](../src/WSnip.App/App.xaml.cs) | 終了ポリシーを `OnExplicitShutdown` に設定し、`App.OnLaunched` で `AppController` と設定ストアを作成。Debug の表示フィクスチャの入口もここ。 |
 | [AppController.cs](../src/WSnip.App/Services/AppController.cs) | アプリ全体の進行役。`HandleArguments`、`StartSnipAsync`、`SnipWholeWindowAsync`、`DeliverAsync`、設定更新、トレイ、ホットキー、終了条件。機能追加時の最初の確認先。 |
 | [AppWindowBase.cs](../src/WSnip.App/Services/AppWindowBase.cs) | WinUI ウィンドウの HWND、表示・非表示、位置・サイズ、枠なし最前面表示、ウィンドウ一覧と寿命。 |
 | [NativeTray.cs](../src/WSnip.App/Services/NativeTray.cs) | 通知領域アイコンとネイティブメニュー。 |
@@ -137,9 +137,19 @@ flowchart TD
 
 キャンセルなら既存の編集内容を保持して表示を戻す。新しい選択が確定した場合に前のドキュメントを退役させる。
 モードバーで通常モードと「ウィンドウ全体」を切り替える際は、現在の選択 UI を終了して `StartSnipAsync` のループで別の経路へ進む。
+取得経路の分岐は保存する画素の違いによる。「ウィンドウ」は凍結したデスクトップ画像の矩形を切り抜くため、その場所に重なっている他のウィンドウも画像に含まれる。
+「ウィンドウ全体」は対象 HWND の画像を単独取得し、隠れた部分と透明度を保つ。どちらの経路へ切り替えても、同じキャプチャ操作を継続する。
 エディターで保存・コピーするときは `EditorDocument.FlattenAsync` → `AppController` の保存 / コピー処理へ進む。
 
 ## 設計上の要点
+
+### モード切り替えとアプリの終了
+
+`App` は `DispatcherShutdownMode.OnExplicitShutdown` を設定する。WinUI 既定の `OnLastWindowClose` では、
+モード切り替え中に最後の選択ウィンドウを閉じると UI のイベントループが終了し、次の選択画面を作れなくなる。
+`AppController` の `capturing` フラグだけでは WinUI 自身の終了処理を止められない。
+終了は `ExitIfIdle` / `Exit` で判断し、キャプチャ中・保存中・バックグラウンド動作が必要な間はイベントループを維持する。
+ホットキー・エディター・トレイの有無に依存せず、「全画面 → ウィンドウ全体 → 全画面」を同じプロセスで往復できることを確認する。
 
 ### 凍結オーバーレイの性能と初期表示
 
