@@ -92,6 +92,13 @@ public class AppWindowBase : Window
         AppWindow.IsShownInSwitchers = false;
     }
     public void CloseSafely() { if (!IsClosed) Close(); }
+    protected void SetDwmFlag(uint attribute, bool enabled)
+    {
+        int value = enabled ? 1 : 0;
+        Marshal.ThrowExceptionForHR(DwmSetWindowAttribute(Handle, attribute, ref value, sizeof(int)));
+    }
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(nint window, uint attribute, ref int value, uint size);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint hwnd);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern nint SetWindowLongPtr(nint hwnd, int index, nint value);
 }

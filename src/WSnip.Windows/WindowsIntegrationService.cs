@@ -1,4 +1,7 @@
 using System.Runtime.Versioning;
+using System.Runtime.InteropServices;
+using System.ComponentModel;
+using WSnip.Core.Imaging;
 using WSnip.Core.Platform;
 using WSnip.Windows.Interop;
 
@@ -43,6 +46,37 @@ public sealed unsafe class WindowsIntegrationService : IWindowIntegrationService
     {
         if (windowHandle != 0)
             Native.SetWindowDisplayAffinity(windowHandle, excluded ? AffinityExcludeFromCapture : AffinityNone);
+    }
+
+    public void SetOverlayCutout(nint windowHandle, PixelRect? desktopBounds)
+    {
+        if (desktopBounds is null)
+        {
+            if (Native.SetWindowRgn(windowHandle, 0, true) == 0)
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            return;
+        }
+        Rect window;
+        if (!Native.GetWindowRect(windowHandle, &window))
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        nint region = Native.CreateRectRgn(0, 0, window.Right - window.Left, window.Bottom - window.Top);
+        if (region == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
+        try
+        {
+            PixelRect rect = desktopBounds.Value.Offset(-window.Left, -window.Top);
+            nint hole = Native.CreateRectRgn(rect.X, rect.Y, rect.Right, rect.Bottom);
+            if (hole == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
+            try
+            {
+                if (Native.CombineRgn(region, region, hole, 4) == 0) // RGN_DIFF
+                    throw new Win32Exception(Marshal.GetLastPInvokeError());
+            }
+            finally { Native.DeleteObject(hole); }
+            if (Native.SetWindowRgn(windowHandle, region, true) == 0)
+                throw new Win32Exception(Marshal.GetLastPInvokeError());
+            region = 0; // SetWindowRgn transferred ownership to the system.
+        }
+        finally { if (region != 0) Native.DeleteObject(region); }
     }
 
     public bool TryGetCursorPosition(out int x, out int y)

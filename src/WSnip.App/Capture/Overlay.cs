@@ -1,11 +1,8 @@
 using Microsoft.UI.Input;
 using Microsoft.Graphics.Canvas;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
@@ -26,14 +23,13 @@ public sealed record SnipSelection(SnipMode Mode, PixelRect Region, IReadOnlyLis
 
 /// <summary>
 /// The frozen-screen overlay: one borderless topmost window per display showing what was captured,
-/// dimmed outside the selection, with the snip mode bar on the display under the pointer. Where the
-/// compositor places windows, a single full-screen window shows the display it opens on.
+/// dimmed outside the selection. The capture operation owns a separate persistent toolbar.
 /// </summary>
-public sealed class OverlaySession : IDisposable
+internal sealed class OverlaySession : IDisposable
 {
     private readonly ScreenSnapshot snapshot;
-    private readonly bool placeWindows;
     private readonly ThemeService theme;
+    private readonly CaptureToolbar toolbar;
     private readonly List<OverlayWindow> windows = [];
     private readonly TaskCompletionSource<SnipSelection?> result = new();
     private PixelPoint? anchor;
@@ -41,13 +37,15 @@ public sealed class OverlaySession : IDisposable
     private List<(double X, double Y)>? outline;
     private bool finished;
 
-    /// <param name="placeWindows">Whether windows can be placed on each display, rather than by the compositor.</param>
-    public OverlaySession(ScreenSnapshot snapshot, SnipMode mode, bool placeWindows, ThemeService theme)
+    public OverlaySession(ScreenSnapshot snapshot, CaptureToolbar toolbar, ThemeService theme)
     {
         this.snapshot = snapshot;
-        this.placeWindows = placeWindows;
         this.theme = theme;
-        Mode = mode;
+        this.toolbar = toolbar;
+        Mode = toolbar.Mode;
+        toolbar.ModeChanged += SetMode;
+        toolbar.CancelRequested += Cancel;
+        toolbar.BoundsChanged += UpdateToolbarCutouts;
     }
 
     public event EventHandler? Changed;
@@ -65,14 +63,13 @@ public sealed class OverlaySession : IDisposable
 
     public async Task<SnipSelection?> ShowAsync(PixelPoint pointer)
     {
-        MonitorCapture barMonitor = snapshot.MonitorAt(pointer.X, pointer.Y)
-            ?? snapshot.Monitors.FirstOrDefault(m => m.IsPrimary) ?? snapshot.Monitors[0];
+        if (finished) return await result.Task;
         try
         {
             UpdateHover(pointer);
             foreach (MonitorCapture monitor in snapshot.Monitors)
             {
-                var window = new OverlayWindow(this, monitor, monitor == barMonitor);
+                var window = new OverlayWindow(this, monitor, toolbar);
                 windows.Add(window);
                 theme.Attach(window, manageShellBackdrop: false);
             }
@@ -83,7 +80,7 @@ public sealed class OverlaySession : IDisposable
             {
                 // Reveal together only after every display has its frozen image and XAML ready.
                 foreach (OverlayWindow window in overlays) window.Reveal();
-                overlays.FirstOrDefault(window => window.Monitor == barMonitor)?.Activate();
+                toolbar.Activate();
             }
             else Finish(null);
             return await result.Task;
@@ -100,6 +97,7 @@ public sealed class OverlaySession : IDisposable
 
     public void SetMode(SnipMode mode)
     {
+        if (finished) return;
         Mode = mode;
         anchor = null;
         selection = null;
@@ -111,7 +109,12 @@ public sealed class OverlaySession : IDisposable
             Finish(null);
     }
 
-    public void Cancel() => Finish(null);
+    public void Cancel()
+    {
+        if (finished) return;
+        toolbar.Cancel();
+        Finish(null);
+    }
 
     public void Dispose() => Finish(null);
 
@@ -213,10 +216,18 @@ public sealed class OverlaySession : IDisposable
         if (finished)
             return;
         finished = true;
+        toolbar.ModeChanged -= SetMode;
+        toolbar.CancelRequested -= Cancel;
+        toolbar.BoundsChanged -= UpdateToolbarCutouts;
         foreach (OverlayWindow window in windows)
             window.CloseSafely();
         windows.Clear();
         result.TrySetResult(selected);
+    }
+
+    private void UpdateToolbarCutouts()
+    {
+        foreach (OverlayWindow window in windows) window.UpdateToolbarCutout();
     }
 
     private static PixelRect OutlineBounds(IReadOnlyList<(double X, double Y)> points)
@@ -234,26 +245,23 @@ internal sealed class OverlayWindow : AppWindowBase
     private const uint DwmCloak = 13;
     private readonly OverlaySession session;
     private readonly OverlaySurface surface;
+    private readonly CaptureToolbar toolbar;
     private bool pressed;
     private PixelRect? previousSelection;
     private bool previousFreeform;
     public MonitorCapture Monitor { get; }
-    public OverlayWindow(OverlaySession session, MonitorCapture monitor, bool showBar)
+    public OverlayWindow(OverlaySession session, MonitorCapture monitor, CaptureToolbar toolbar)
     {
         this.session = session; Monitor = monitor;
+        this.toolbar = toolbar;
         SetDwmFlag(DwmCloak, true); // Compose while keeping the initial window off screen.
         SetDwmFlag(DwmTransitionsForceDisabled, true); // Reveal the frozen screen without a fade.
         Title = AppStrings.OverlayTitle;
         MakeOverlay();
         AppWindow.MoveAndResize(new RectInt32(monitor.Bounds.X, monitor.Bounds.Y, monitor.Bounds.Width, monitor.Bounds.Height));
         surface = new OverlaySurface(session, monitor) { WindowHandle = Handle, FixedDisplay = monitor.Color };
-        surface.RenderingFailed += (_, e) => { session.Cancel(); MessageDialog.Show(null, "FluentWSnip", e.Message); };
+        surface.RenderingFailed += (_, e) => { session.Cancel(); toolbar.CloseSafely(); MessageDialog.Show(null, "FluentWSnip", e.Message); };
         var root = new Grid(); root.Children.Add(surface);
-        if (showBar)
-            root.Children.Add(new SnipModeBar(session.Mode, session.SetMode, session.Cancel)
-            {
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0,24,0,0),
-            });
         Content = root;
         surface.PointerPressed += (_, e) =>
         {
@@ -285,6 +293,7 @@ internal sealed class OverlayWindow : AppWindowBase
         // Show without activation so XAML can load/layout, while DWM keeps the window cloaked.
         AppWindow.Show(activateWindow: false);
         AppWindow.MoveAndResize(new RectInt32(Monitor.Bounds.X, Monitor.Bounds.Y, Monitor.Bounds.Width, Monitor.Bounds.Height));
+        UpdateToolbarCutout();
         if (!await surface.InitialFrameReady || IsClosed) return false;
         await Compositor.RequestCommitAsync();
         return !IsClosed;
@@ -293,13 +302,10 @@ internal sealed class OverlayWindow : AppWindowBase
     {
         if (!IsClosed) SetDwmFlag(DwmCloak, false);
     }
-    private void SetDwmFlag(uint attribute, bool enabled)
+    internal void UpdateToolbarCutout()
     {
-        int value = enabled ? 1 : 0;
-        Marshal.ThrowExceptionForHR(DwmSetWindowAttribute(Handle, attribute, ref value, sizeof(int)));
+        if (!IsClosed) App.Platform!.Windows.SetOverlayCutout(Handle, toolbar.IsVisible ? toolbar.PixelBounds : null);
     }
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(nint window, uint attribute, ref int value, uint size);
 
     private void FollowPointer(object? sender, object args)
     {
@@ -365,47 +371,4 @@ internal sealed class OverlaySurface : HdrSurface
         OverlayDrawing.Draw(canvas, new Rect(0, 0, ActualWidth, ActualHeight), rectangle, points, (float)Surface.ReferenceWhiteScale);
     }
     public override void Dispose() { image.Release(); base.Dispose(); }
-}
-
-internal sealed class SnipModeBar : UserControl
-{
-    public SnipModeBar(SnipMode selected, Action<SnipMode> select, Action cancel, bool useDesktopBackdrop = false)
-    {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        var buttons = new List<ToggleButton>();
-        foreach (var option in SnipModeOption.All)
-        {
-            var button = new ToggleButton { Content = new SymbolIcon(option.Mode switch { SnipMode.Window => Symbol.OpenPane, SnipMode.Fullscreen => Symbol.FullScreen, SnipMode.Freeform => Symbol.Edit, SnipMode.WholeWindow => Symbol.BrowsePhotos, _ => Symbol.SelectAll }), IsChecked = option.Mode == selected };
-            ToolTipService.SetToolTip(button,string.Format(AppStrings.ModeDescription,option.Label,option.Description));
-            AutomationProperties.SetName(button,option.Label);
-            AutomationProperties.SetAutomationId(button,$"SnipMode{option.Mode}");
-            button.Click += (_, _) => { foreach(var other in buttons) other.IsChecked = other == button; select(option.Mode); };
-            buttons.Add(button); panel.Children.Add(button);
-        }
-        var close = new Button { Content = new SymbolIcon(Symbol.Cancel) };
-        AutomationProperties.SetName(close,AppStrings.Cancel);
-        AutomationProperties.SetAutomationId(close,"CancelSnip");
-        ToolTipService.SetToolTip(close,AppStrings.CancelTip);
-        close.Click += (_, _) => cancel(); panel.Children.Add(close);
-        Content = new Border
-        {
-            Style = (Style)Application.Current.Resources[useDesktopBackdrop ? "DesktopSnipModeBarStyle" : "SnipModeBarStyle"],
-            Child = panel,
-        };
-    }
-}
-
-internal sealed class WholeWindowToolbar : AppWindowBase
-{
-    public SnipMode? RequestedMode { get; private set; }
-    public WholeWindowToolbar(PixelPoint pointer, bool placeWindow, Action cancel)
-    {
-        Title = AppStrings.OverlayTitle; MakeOverlay();
-        Content = new SnipModeBar(SnipMode.WholeWindow, mode => { if(mode != SnipMode.WholeWindow) { RequestedMode = mode; cancel(); } }, cancel, useDesktopBackdrop: true);
-        SystemBackdrop = new DesktopAcrylicBackdrop();
-        var display = Microsoft.UI.Windowing.DisplayArea.GetFromPoint(pointer,Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
-        Position = new PointInt32(display.OuterBounds.X + display.OuterBounds.Width / 2 - 180,display.OuterBounds.Y + 24);
-        SetSize(380,64);
-        Closed += (_, _) => cancel();
-    }
 }

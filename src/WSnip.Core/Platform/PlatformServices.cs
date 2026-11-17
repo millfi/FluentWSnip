@@ -133,6 +133,9 @@ public interface IWindowIntegrationService
     /// </summary>
     void SetExcludedFromCapture(nint windowHandle, bool excluded);
 
+    /// <summary>Removes a desktop-pixel rectangle from an overlay's visible and input region; null restores the full window.</summary>
+    void SetOverlayCutout(nint windowHandle, PixelRect? desktopBounds);
+
     /// <summary>The pointer position in physical virtual-desktop pixels.</summary>
     bool TryGetCursorPosition(out int x, out int y);
 }

@@ -90,7 +90,7 @@ winapp run src/WSnip.App/WSnip.App.csproj --arch x64 -c Debug -p Platform=x64 --
 | 変更対象 | 画面で確認すること |
 | --- | --- |
 | 凍結オーバーレイ | 開始前の白いフラッシュがない、矩形ドラッグが滑らか、表示倍率・複数画面をまたぐ選択、確定時の座標、Esc / 右クリック。 |
-| モード切り替え・終了 | エディターやトレイのない `--snip fullscreen` 起動から「ウィンドウ全体」と往復し、再度ホットキーを押さず選択を続けられる。キャンセル後は通常の終了条件に従って終了する。 |
+| モード切り替え・終了 | エディターやトレイのない起動から「ウィンドウ全体」と往復し、同じツールバーが消えず位置・サイズも変わらない。凍結背景を前面にしてもツールバーを覆わない。ツールバーが撮影に写らない。キャンセル後は通常の終了条件に従って終了する。 |
 | ライブの「ウィンドウ全体」 | ホバー先だけ明るい、枠が追従する、ツールバーを操作できる、クリックが選択先アプリに届かない、キャンセル後に暗幕とカーソルが残らない。 |
 | テーマ・素材 | アプリの Light / Dark / System、通常選択と「ウィンドウ全体」の両ツールバー、アイコンの可読性、アクリルの表示とフォールバック。 |
 | エディター | ペン・蛍光ペン・消しゴム、クロップと undo / redo、ズーム・パン、HDR / SDR 切替、表示先モニターの変更。 |
@@ -165,7 +165,8 @@ MSIX の identity、alias、startup task、バージョンを変える場合は�
 | 設定・ログが見つからない | `WindowsPackage.IsPackaged`。開発登録もパッケージ identity を持つため、単に Debug だから `%APPDATA%` とは限らない。 |
 | キャプチャ開始前に白くなる | `OverlayWindow.PrepareAsync`、`HdrSurface.InitialFrameReady`、compositor commit より先に表示していないか。 |
 | 矩形選択が低 FPS | 背景の再描画・転送回数、composition にまとめた更新、モニターごとの不要な更新。 |
-| ツールバーの色や素材が違う | `App.xaml` の二つのスタイル、固定の `RequestedTheme`、`ThemeService.Attach` の背景管理フラグ、`DesktopAcrylicBackdrop`。 |
+| ツールバーが消える・レイアウトが変わる | `CaptureToolbar` の寿命、内容の測定と DPI、`SetOverlayCutout`。取得経路の切り替えでツールバーを作り直していないか。 |
+| ツールバーの色や素材が違う | `App.xaml` の `SnipModeBarStyle`、固定の `RequestedTheme`、`ThemeService.Attach` の背景管理フラグ、`DesktopAcrylicBackdrop`。 |
 | ライブ選択を終えても暗幕・十字カーソルが残る | picker の `finally`、native window / timer / hook の解放、`RestoreCursors`。 |
 | 色・明るさ・透明度が変わる | 取得時と相対 scRGB の区別、SDR 白、表示側の白倍率、straight / premultiplied alpha、行ストライド。 |
 

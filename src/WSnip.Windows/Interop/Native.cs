@@ -238,7 +238,7 @@ internal static unsafe partial class Native
     [LibraryImport("user32.dll", SetLastError = true)]
     public static partial int SetWindowRgn(nint window, nint region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowRect(nint window, Rect* rectangle);
 

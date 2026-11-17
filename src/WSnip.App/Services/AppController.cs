@@ -142,46 +142,52 @@ public sealed class AppController : IDisposable
             return;
         capturing = true;
         List<(Window Window, Window? Owner)>? hidden = null;
+        CaptureToolbar? toolbar = null;
+        using var selectionCancellation = new CancellationTokenSource();
         try
         {
             SnipMode initialMode = mode ?? Settings.Mode;
             int delay = delaySeconds ?? 0;
-            while (true)
+            hidden = HideWindows();
+            if (delay > 0)
+                await Task.Delay(TimeSpan.FromSeconds(delay));
+            else if (hidden.Count > 0)
+                await Task.Delay(HiddenWindowsSettle);
+
+            platform.Windows.TryGetCursorPosition(out int pointerX, out int pointerY);
+            toolbar = new CaptureToolbar(new PixelPoint(pointerX, pointerY), initialMode, Theme);
+            toolbar.ModeChanged += selected => UpdateSettings(Settings.With(s => s.Mode = selected));
+            toolbar.CancelRequested += selectionCancellation.Cancel;
+            if (!await toolbar.ShowAsync()) return;
+
+            while (!toolbar.IsCancelled && !exiting)
             {
-                hidden ??= HideWindows();
-                if (initialMode == SnipMode.WholeWindow)
+                if (toolbar.Mode == SnipMode.WholeWindow)
                 {
-                    SnipMode? nextMode = await SnipWholeWindowAsync(delay,
+                    SnipMode? nextMode = await SnipWholeWindowAsync(toolbar,
                         restoreEditor: hidden.Any(entry => ReferenceEquals(entry.Window, editor)));
                     if (nextMode is null)
                         return;
-                    initialMode = nextMode.Value;
-                    delay = 0;
-                }
-
-                if (delay > 0)
-                    await Task.Delay(TimeSpan.FromSeconds(delay));
-                else if (hidden is { Count: > 0 })
-                    await Task.Delay(HiddenWindowsSettle);
-
-                using ScreenSnapshot snapshot = await platform.Capture.CaptureAsync(new CaptureOptions { IncludeCursor = Settings.IncludeCursor });
-                platform.Windows.TryGetCursorPosition(out int x, out int y);
-                using var session = new OverlaySession(snapshot, initialMode, placeWindows: platform.Windows.CanPlaceWindows, theme: Theme);
-                SnipSelection? selection = await session.ShowAsync(new PixelPoint(x, y));
-
-                // A mode picked on the overlay's own bar becomes the default for the next snip.
-                if (session.Mode != initialMode)
-                    UpdateSettings(Settings.With(s => s.Mode = session.Mode));
-                if (selection is null)
-                {
-                    snapshot.Dispose();
-                    if (session.Mode != SnipMode.WholeWindow)
-                        return;
-                    initialMode = SnipMode.WholeWindow;
-                    delay = 0;
                     continue;
                 }
 
+                // The toolbar stays visible, but display affinity excludes it from this snapshot.
+                using ScreenSnapshot snapshot = await platform.Capture.CaptureAsync(
+                    new CaptureOptions { IncludeCursor = Settings.IncludeCursor }, selectionCancellation.Token);
+                if (toolbar.IsCancelled || exiting) return;
+                if (toolbar.Mode == SnipMode.WholeWindow) continue;
+                platform.Windows.TryGetCursorPosition(out int x, out int y);
+                using var session = new OverlaySession(snapshot, toolbar, Theme);
+                SnipSelection? selection = await session.ShowAsync(new PixelPoint(x, y));
+
+                if (selection is null)
+                {
+                    // The toolbar may already have changed again while this background was closing.
+                    if (!toolbar.IsCancelled && session.Mode == SnipMode.WholeWindow) continue;
+                    return;
+                }
+
+                toolbar.Hide();
                 // A confirmed selection replaces the old document before composition and encoding.
                 // Cancellation still preserves it, but its pixels never overlap a new delivery.
                 editor?.Clear();
@@ -200,10 +206,12 @@ public sealed class AppController : IDisposable
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             AppLog.Error("Snip", "Taking a snip failed.", exception);
+            toolbar?.CloseSafely();
             MessageDialog.Show(editor is { IsVisible: true } ? editor : null, "FluentWSnip", string.Format(AppStrings.CaptureFailed, exception.Message));
         }
         finally
         {
+            toolbar?.CloseSafely();
             if (hidden is not null)
                 RestoreWindows(hidden);
             capturing = false;
@@ -419,26 +427,24 @@ public sealed class AppController : IDisposable
     /// from the compositor, with its transparency.
     /// </summary>
     /// <remarks>
-    /// The app's own windows are hidden meanwhile, so they neither cover the windows to pick from
-    /// nor stay active in front of them; the capture flow restores them afterward.
+    /// The editor and settings windows stay hidden; the shared capture toolbar remains available.
+    /// The capture flow restores the hidden windows afterward.
     /// </remarks>
-    private async Task<SnipMode?> SnipWholeWindowAsync(int delaySeconds, bool restoreEditor)
+    private async Task<SnipMode?> SnipWholeWindowAsync(CaptureToolbar toolbar, bool restoreEditor)
     {
         if (!platform.WindowPicker.IsSupported)
             throw new NotSupportedException(AppStrings.WindowPickingUnsupported);
 
         using var cancellation = new CancellationTokenSource();
-        WholeWindowToolbar? toolbar = null;
         CapturedWindow? window;
-        WindowCapture capture;
+        bool modeChanged = false;
+        void ModeChanged(SnipMode _) { modeChanged = true; cancellation.Cancel(); }
+        toolbar.ModeChanged += ModeChanged;
+        toolbar.CancelRequested += cancellation.Cancel;
         try
         {
-            if (delaySeconds > 0)
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
-            platform.Windows.TryGetCursorPosition(out int x, out int y);
-            toolbar = new WholeWindowToolbar(new PixelPoint(x, y), platform.Windows.CanPlaceWindows, cancellation.Cancel);
-            Theme.Attach(toolbar, manageShellBackdrop: false);
-            toolbar.Show();
+            if (toolbar.IsCancelled) return null;
+            if (toolbar.Mode != SnipMode.WholeWindow) return toolbar.Mode;
             try
             {
                 window = await platform.WindowPicker.PickAsync(cancellation.Token);
@@ -447,22 +453,18 @@ public sealed class AppController : IDisposable
             {
                 window = null;
             }
-            if (toolbar.RequestedMode is { } nextMode)
-            {
-                UpdateSettings(Settings.With(settings => settings.Mode = nextMode));
-                return nextMode;
-            }
-            toolbar.CloseSafely();
-            if (window is null)
-                return null;
-            capture = await platform.Capture.CaptureWindowAsync(window, new CaptureOptions { IncludeCursor = Settings.IncludeCursor });
         }
         finally
         {
-            toolbar?.CloseSafely();
+            toolbar.ModeChanged -= ModeChanged;
+            toolbar.CancelRequested -= cancellation.Cancel;
         }
 
-        using WindowCapture ownedCapture = capture;
+        if (toolbar.IsCancelled) return null;
+        if (modeChanged || toolbar.Mode != SnipMode.WholeWindow) return toolbar.Mode;
+        if (window is null) return null;
+        toolbar.Hide();
+        using WindowCapture capture = await platform.Capture.CaptureWindowAsync(window, new CaptureOptions { IncludeCursor = Settings.IncludeCursor });
         // The portal asks for the window during CaptureWindowAsync, not PickAsync. Only retire
         // the old snip after capture succeeds so declining that prompt never loses edits.
         editor?.Clear();

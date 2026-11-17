@@ -36,7 +36,8 @@ flowchart LR
 
 | ファイル | 主な責務・変更時の注意 |
 | --- | --- |
-| [Overlay.cs](../src/WSnip.App/Capture/Overlay.cs) | 複数の型を含む。`OverlaySession` は矩形・ウィンドウ・画面・自由形状の選択状態、`OverlayWindow` は画面ごとの表示と入力、`OverlaySurface` は凍結背景と選択の描画。`SnipModeBar` と `WholeWindowToolbar` もこのファイル内。 |
+| [Overlay.cs](../src/WSnip.App/Capture/Overlay.cs) | `OverlaySession` は矩形・ウィンドウ・画面・自由形状の選択状態、`OverlayWindow` は画面ごとの表示と入力、`OverlaySurface` は凍結背景と選択の描画。共有ツールバーのモード・キャンセル通知を受け取る。 |
+| [CaptureToolbar.cs](../src/WSnip.App/Capture/CaptureToolbar.cs) | 全モードで使い回す一つの `CaptureToolbar` ウィンドウと `SnipModeBar`。モード選択・キャンセル、内容からのサイズ測定、DPI を考慮した配置、撮影除外、アクリル背景。 |
 | [OverlayDrawing.cs](../src/WSnip.App/Capture/OverlayDrawing.cs) | GPU 上で暗幕と選択枠を描く。矩形は重ならない四つの暗幕、自由形状は形状の差分を使う。 |
 | [SnipModeOption.cs](../src/WSnip.App/Capture/SnipModeOption.cs) | モードの一覧、ローカライズされた表示名・説明。 |
 | [WindowsScreenCaptureService.cs](../src/WSnip.Windows/Capture/WindowsScreenCaptureService.cs) | `CaptureAsync` は全画面、`CaptureWindowAsync` は一つの HWND を取得。Windows.Graphics.Capture の FP16 フレーム、カーソル、枠なしキャプチャ、タイムアウト、サイズ変更、失敗後のデバイス再作成。 |
@@ -69,7 +70,7 @@ flowchart LR
 | [SettingsWindow.xaml](../src/WSnip.App/Settings/SettingsWindow.xaml)、[SettingsWindow.xaml.cs](../src/WSnip.App/Settings/SettingsWindow.xaml.cs) | 設定画面の表示、値の初期化、変更の保存。 |
 | [HotkeyRow.xaml](../src/WSnip.App/Settings/HotkeyRow.xaml)、[HotkeyRow.xaml.cs](../src/WSnip.App/Settings/HotkeyRow.xaml.cs) | ショートカットの入力と表示。 |
 | [ThemeService.cs](../src/WSnip.App/Services/ThemeService.cs) | アプリの Light / Dark / System 指定、Mica、枠の色、テーマ関連イベントの管理。`Attach(..., manageShellBackdrop: false)` はテーマだけを連動し、ウィンドウ独自の背景を維持する。 |
-| [App.xaml](../src/WSnip.App/App.xaml) | 共通スタイル。`SnipModeBarStyle` は標準アクリルブラシ、`DesktopSnipModeBarStyle` はデスクトップアクリルを見せる透明な背景。色は `ThemeResource` で解決する。 |
+| [App.xaml](../src/WSnip.App/App.xaml) | 共通スタイル。`SnipModeBarStyle` はデスクトップアクリルを見せる透明な背景と、テーマ連動の枠・共通の余白。色は `ThemeResource` で解決する。 |
 | [Strings/](../src/WSnip.Core/Strings) | `AppStrings.resx` が既定の en-US。`AppStrings.en-GB.resx`、`de-DE`、`es-ES`、`fr-FR`、`ja-JP`、`zh-CN`、`zh-TW` が翻訳。強く型付けされた `AppStrings` はビルド生成。 |
 
 ### Windows との接続
@@ -83,7 +84,7 @@ flowchart LR
 | [WindowsFilePicker.cs](../src/WSnip.Windows/WindowsFilePicker.cs) | Windows のファイル選択 UI。 |
 | [WindowsPackage.cs](../src/WSnip.Windows/WindowsPackage.cs) | パッケージ判定、MSIX の起動種別、設定・ログの保存先。 |
 | [WindowsShellService.cs](../src/WSnip.Windows/WindowsShellService.cs) | 自動保存フォルダー、Explorer、既定アプリ設定、MSIX の startup task / 非パッケージの Run キー。 |
-| [WindowsIntegrationService.cs](../src/WSnip.Windows/WindowsIntegrationService.cs) | DWM の枠・Mica 関連、キャプチャ除外、カーソル位置。 |
+| [WindowsIntegrationService.cs](../src/WSnip.Windows/WindowsIntegrationService.cs) | DWM の枠・Mica 関連、キャプチャ除外、カーソル位置。`SetOverlayCutout` は凍結背景の表示・入力領域からツールバー部分を除外する。 |
 | [Native.cs](../src/WSnip.Windows/Interop/Native.cs) | Win32 / DWM / GDI の構造体、定数、P/Invoke 宣言。Windows キャプチャ UI のネイティブ処理を変更するときの確認先。 |
 
 ### 画像データと色処理
@@ -136,7 +137,9 @@ flowchart TD
 ```
 
 キャンセルなら既存の編集内容を保持して表示を戻す。新しい選択が確定した場合に前のドキュメントを退役させる。
-モードバーで通常モードと「ウィンドウ全体」を切り替える際は、現在の選択 UI を終了して `StartSnipAsync` のループで別の経路へ進む。
+`StartSnipAsync` が一つの `CaptureToolbar` を作成して表示し、モード切り替え中も同じウィンドウ・コントロールを維持する。
+通常モードと「ウィンドウ全体」の切り替えでは、選択用の背景だけを終了してループで別の取得経路へ進む。
+スクリーンショットには表示中のツールバーが写らないよう、display affinity で撮影から除外する。
 取得経路の分岐は保存する画素の違いによる。「ウィンドウ」は凍結したデスクトップ画像の矩形を切り抜くため、その場所に重なっている他のウィンドウも画像に含まれる。
 「ウィンドウ全体」は対象 HWND の画像を単独取得し、隠れた部分と透明度を保つ。どちらの経路へ切り替えても、同じキャプチャ操作を継続する。
 エディターで保存・コピーするときは `EditorDocument.FlattenAsync` → `AppController` の保存 / コピー処理へ進む。
@@ -145,9 +148,11 @@ flowchart TD
 
 ### モード切り替えとアプリの終了
 
-`App` は `DispatcherShutdownMode.OnExplicitShutdown` を設定する。WinUI 既定の `OnLastWindowClose` では、
-モード切り替え中に最後の選択ウィンドウを閉じると UI のイベントループが終了し、次の選択画面を作れなくなる。
-`AppController` の `capturing` フラグだけでは WinUI 自身の終了処理を止められない。
+`App` は `DispatcherShutdownMode.OnExplicitShutdown` を設定する。WinUI 既定の `OnLastWindowClose` に依存せず、
+`AppController` がキャプチャ・保存・バックグラウンド処理の状態で終了を判断する。
+モード切り替え中は `CaptureToolbar` を閉じたり隠したりせず、選択確定または操作全体の終了時に片付ける。
+ツールバーは内容の `DesiredSize` と DPI からクライアントサイズを決め、最初のモニターの中央・上端から24 DIPに配置する。
+凍結背景はツールバーの位置をウィンドウ領域からくり抜き、背景をクリックして前面になってもツールバーを覆わない。
 終了は `ExitIfIdle` / `Exit` で判断し、キャプチャ中・保存中・バックグラウンド動作が必要な間はイベントループを維持する。
 ホットキー・エディター・トレイの有無に依存せず、「全画面 → ウィンドウ全体 → 全画面」を同じプロセスで往復できることを確認する。
 
@@ -159,7 +164,7 @@ flowchart TD
 背景を毎ポインターイベントで再ラスタライズ・再転送する変更は、4K / HDR での低 FPS を再発させる。
 
 `OverlayWindow` は DWM cloak で隠して XAML をロードし、`HdrSurface.InitialFrameReady` と compositor の commit を待つ。
-全モニターの `PrepareAsync` が揃ってから `Reveal` し、最後に選択側をアクティブにする。先に表示すると白い初期背景が見える。
+全モニターの `PrepareAsync` が揃ってから `Reveal` し、最後に共有ツールバーをアクティブにする。先に表示すると白い初期背景が見える。
 初回は表示中の render tick に依存せず準備できるよう、DispatcherQueue 経由で描く。失敗・破棄時は初回待機も終了させる。
 
 エディターの `SnipCanvas` は編集内容を毎回描く別の用途。凍結背景と同じキャッシュを一律に有効にすると編集や表示変更が反映されなくなる。
@@ -175,8 +180,8 @@ flowchart TD
 ### テーマとアクリル
 
 モードバーのテーマを Dark に固定しない。`ThemeService` がアプリの Light / Dark / System を選択画面にも適用する。
-凍結画面上では `SnipModeBarStyle` の in-app acrylic、別ウィンドウの `WholeWindowToolbar` では `DesktopAcrylicBackdrop` と `DesktopSnipModeBarStyle` を使う。
-これらは `manageShellBackdrop: false` でテーマ連動させる。通常のウィンドウ用 Mica / 不透明背景スタイルで上書きしない。
+すべてのモードが同じ `CaptureToolbar` の `DesktopAcrylicBackdrop` と `SnipModeBarStyle` を使う。
+ツールバーと凍結背景は `manageShellBackdrop: false` でテーマ連動させる。通常のウィンドウ用 Mica / 不透明背景スタイルで上書きしない。
 標準のテーマリソースはライト・ダーク・ハイコントラストや素材のフォールバックにも対応する。
 
 ### 色の単位と座標
