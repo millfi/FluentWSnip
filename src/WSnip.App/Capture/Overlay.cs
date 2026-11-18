@@ -275,19 +275,20 @@ internal sealed class OverlayWindow : AppWindowBase
             if (activePointer is not null || !p.Properties.IsLeftButtonPressed || !surface.CapturePointer(e.Pointer))
                 return;
             activePointer = e.Pointer.PointerId;
-            session.PointerPressed(Pointer(p.Position));
-            CompositionTarget.Rendering += FollowPointer;
+            session.PointerPressed(ToDesktopPoint(p));
+            if (p.PointerDeviceType == PointerDeviceType.Mouse)
+                CompositionTarget.Rendering += FollowPointer;
             e.Handled = true;
         };
         surface.PointerMoved += (_, e) =>
         {
             if (activePointer is null || activePointer == e.Pointer.PointerId)
-                session.PointerMoved(Pointer(e.GetCurrentPoint(surface).Position));
+                session.PointerMoved(ToDesktopPoint(e.GetCurrentPoint(surface)));
         };
         surface.PointerReleased += (_, e) =>
         {
             if (activePointer != e.Pointer.PointerId) return;
-            var point = Pointer(e.GetCurrentPoint(surface).Position);
+            var point = ToDesktopPoint(e.GetCurrentPoint(surface));
             EndPointerTracking(e.Pointer);
             session.PointerReleased(point);
             e.Handled = true;
@@ -336,10 +337,17 @@ internal sealed class OverlayWindow : AppWindowBase
     {
         if (App.Platform!.Windows.TryGetCursorPosition(out int x, out int y)) session.PointerMoved(new PixelPoint(x, y));
     }
-    private PixelPoint Pointer(Point local)
+    private PixelPoint ToDesktopPoint(PointerPoint point)
     {
-        if (App.Platform!.Windows.TryGetCursorPosition(out int x,out int y)) return new PixelPoint(x,y);
-        return new PixelPoint(Monitor.Bounds.X + (int)(local.X * RenderScaling), Monitor.Bounds.Y + (int)(local.Y * RenderScaling));
+        // The desktop cursor tracks the mouse, while pen and touch supply independent contact positions.
+        if (point.PointerDeviceType == PointerDeviceType.Mouse &&
+            App.Platform!.Windows.TryGetCursorPosition(out int x, out int y))
+            return new PixelPoint(x, y);
+
+        Point local = point.Position;
+        double scale = RenderScaling;
+        return new PixelPoint(Monitor.Bounds.X + (int)Math.Round(local.X * scale),
+            Monitor.Bounds.Y + (int)Math.Round(local.Y * scale));
     }
     private void SessionChanged(object? sender, EventArgs e)
     {

@@ -76,6 +76,22 @@ dotnet test tests/WSnip.Rendering.Tests -p:Platform=x64 --no-build --no-restore
 
 このテストは実ディスプレイの HDR 表示や WinUI / DWM 全体の動作を保証するものではない。UI・素材・キャプチャ経路を変えた場合は、対応する画面でも確認する。
 
+### キャプチャの E2E テスト
+
+ロックされていない Windows デスクトップで、PowerShell 7.2 以降と WinApp CLI 0.8 以降を使う。実行前に FluentWSnip のキャプチャや編集を終了し、アプリを閉じる。
+
+```powershell
+./tests/WSnip.Capture.E2E/Test-Capture.ps1
+```
+
+既定は x64 の Release。該当構成のビルドが済んでいれば `-NoBuild` を追加できる。ARM64 で実行する場合は `-Architecture ARM64` を指定する。
+
+スクリプトは通常版と別の開発パッケージを一時登録し、専用の設定で保存とコピーを有効にする。Windows がテスト版に撮影枠の非表示を許可するか尋ねた場合は、枠を表示する選択肢を使う。ツールバーの前面化を待つメッセージが出た場合は、ツールバーの余白をクリックする。
+
+既知の画像を表示する2つのウィンドウを少し重ね、四角形・ウィンドウ・全画面・自由形・ウィンドウ全体を順に撮影する。2回目以降はエディターの新規キャプチャボタンから始める。各モードの選択前にホバーして、オーバーレイとツールバーが維持されることを確認する。保存とクリップボードから取得した PNG は寸法と画素を検査し、重なり方や自由形の透過も確認する。最後に新しいキャプチャを Esc で終了し、出力が増えないこととクリップボードが変わらないことを確認する。
+
+出力は `artifacts/capture-e2e/run-*/` の `results.json`、`saved/`、`*-clipboard.png`。全画面の PNG には実行中のデスクトップが写り、実際のクリップボードには最後にコピーした画像が残る。
+
 ### 画面確認
 
 Debug 専用の [PresentationFixture.cs](../tests/Fixtures/PresentationFixture.cs) は SDR / HDR ランプと P3 色を表示する。デスクトップの撮影は行わない。
