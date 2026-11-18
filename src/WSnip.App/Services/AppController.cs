@@ -506,7 +506,7 @@ public sealed class AppController : IDisposable
         }
     }
 
-    private async Task DeliverAsync(Snip snip, bool restoreEditor = false)
+　    private async Task DeliverAsync(Snip snip, bool restoreEditor = false)
     {
         string? saved = null;
         string? problem = null;

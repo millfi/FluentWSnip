@@ -99,14 +99,19 @@ internal sealed class OverlaySession : IDisposable
     {
         if (finished) return;
         Mode = mode;
-        anchor = null;
-        selection = null;
-        outline = null;
-        Changed?.Invoke(this, EventArgs.Empty);
+        ResetSelection();
 
         // A whole window is picked on the live screen, so the frozen one goes away.
         if (mode == SnipMode.WholeWindow)
             Finish(null);
+    }
+
+    internal void ResetSelection()
+    {
+        anchor = null;
+        selection = null;
+        outline = null;
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public void Cancel()
@@ -246,7 +251,7 @@ internal sealed class OverlayWindow : AppWindowBase
     private readonly OverlaySession session;
     private readonly OverlaySurface surface;
     private readonly CaptureToolbar toolbar;
-    private bool pressed;
+    private uint? activePointer;
     private PixelRect? previousSelection;
     private bool previousFreeform;
     public MonitorCapture Monitor { get; }
@@ -267,23 +272,28 @@ internal sealed class OverlayWindow : AppWindowBase
         {
             var p = e.GetCurrentPoint(surface);
             if (p.Properties.IsRightButtonPressed) { session.Cancel(); return; }
-            if (!p.Properties.IsLeftButtonPressed) return;
-            pressed = true;
-            surface.CapturePointer(e.Pointer);
-            session.PointerPressed(Pointer(e.GetCurrentPoint(surface).Position));
-            CompositionTarget.Rendering += FollowPointer; e.Handled = true;
+            if (activePointer is not null || !p.Properties.IsLeftButtonPressed || !surface.CapturePointer(e.Pointer))
+                return;
+            activePointer = e.Pointer.PointerId;
+            session.PointerPressed(Pointer(p.Position));
+            CompositionTarget.Rendering += FollowPointer;
+            e.Handled = true;
         };
-        surface.PointerMoved += (_, e) => session.PointerMoved(Pointer(e.GetCurrentPoint(surface).Position));
+        surface.PointerMoved += (_, e) =>
+        {
+            if (activePointer is null || activePointer == e.Pointer.PointerId)
+                session.PointerMoved(Pointer(e.GetCurrentPoint(surface).Position));
+        };
         surface.PointerReleased += (_, e) =>
         {
-            if (!pressed) return;
-            pressed = false; CompositionTarget.Rendering -= FollowPointer;
+            if (activePointer != e.Pointer.PointerId) return;
             var point = Pointer(e.GetCurrentPoint(surface).Position);
-            surface.ReleasePointerCapture(e.Pointer);
-            session.PointerReleased(point); e.Handled = true;
+            EndPointerTracking(e.Pointer);
+            session.PointerReleased(point);
+            e.Handled = true;
         };
-        surface.PointerCanceled += (_, _) => session.Cancel();
-        surface.PointerCaptureLost += (_, _) => { if (pressed) { pressed = false; CompositionTarget.Rendering -= FollowPointer; session.Cancel(); } };
+        surface.PointerCanceled += InterruptPointerSelection;
+        surface.PointerCaptureLost += InterruptPointerSelection;
         root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, e) => { if (e.Key == VirtualKey.Escape) { session.Cancel(); e.Handled = true; } }), true);
         session.Changed += SessionChanged;
         Closed += (_, _) => { CompositionTarget.Rendering -= FollowPointer; session.Changed -= SessionChanged; surface.Dispose(); session.Cancel(); };
@@ -305,6 +315,21 @@ internal sealed class OverlayWindow : AppWindowBase
     internal void UpdateToolbarCutout()
     {
         if (!IsClosed) App.Platform!.Windows.SetOverlayCutout(Handle, toolbar.IsVisible ? toolbar.PixelBounds : null);
+    }
+
+    private void InterruptPointerSelection(object sender, PointerRoutedEventArgs e)
+    {
+        // Crossing into the toolbar can interrupt pointer input while the capture session stays open.
+        if (activePointer != e.Pointer.PointerId) return;
+        EndPointerTracking(e.Pointer);
+        if (session.IsDragging) session.ResetSelection();
+    }
+
+    private void EndPointerTracking(Pointer pointer)
+    {
+        activePointer = null;
+        CompositionTarget.Rendering -= FollowPointer;
+        surface.ReleasePointerCapture(pointer);
     }
 
     private void FollowPointer(object? sender, object args)
