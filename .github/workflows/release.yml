@@ -1,6 +1,6 @@
 name: Release
 
-# Builds Windows x64/ARM64 MSIX and WiX setup artifacts.
+# Builds Windows x64/ARM64 MSIX artifacts.
 on:
   push:
     tags:
@@ -147,48 +147,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  build-windows-setup:
-    name: Build Windows setup executables
-    runs-on: windows-2025-vs2026
-    steps:
-      - name: Checkout FluentWSnip
-        uses: actions/checkout@v4
-        with:
-          path: WSnip
-          submodules: recursive
-
-      - name: Set up .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Stamp release version
-        shell: pwsh
-        run: |
-          $version = & "$env:GITHUB_WORKSPACE\WSnip\packaging\Set-Version.ps1" -Tag $env:RELEASE_TAG
-          Write-Host "Packaging FluentWSnip $version"
-
-      # Self-contained WinUI publishes for x64 and ARM64; WiX is restored through its MSBuild SDK.
-      - name: Install LLVM for native binding generation
-        run: choco install llvm --yes --no-progress
-
-      - name: Build x64 and ARM64 setup executables
-        shell: pwsh
-        run: ./WSnip/packaging/WSnipSetup/build.ps1
-
-      - name: Upload Windows setup release assets
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-windows-setup
-          path: WSnip/artifacts/release/FluentWSnipSetup-*.exe
-          if-no-files-found: error
-          retention-days: 1
-
   publish-release:
     name: Publish release
     needs:
       - build-windows
-      - build-windows-setup
     runs-on: ubuntu-latest
     steps:
       - name: Download release assets
@@ -207,4 +169,3 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             release-assets/*.zip
-            release-assets/*.exe

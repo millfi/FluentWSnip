@@ -4,8 +4,8 @@ param(
     [string] $Tag
 )
 
-# Stamps one four-part version into Directory.Build.props (assemblies, WiX setup) and the MSIX
-# manifest, so every package of a release carries the same version. Prints the version.
+# Stamps one four-part version into Directory.Build.props (assemblies) and the MSIX
+# manifests, so every package of a release carries the same version. Prints the version.
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path

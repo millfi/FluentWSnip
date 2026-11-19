@@ -18,8 +18,10 @@
     <Platform Condition="'$(Platform)' == 'AnyCPU'">x64</Platform>
     <PlatformTarget>$(Platform)</PlatformTarget>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
-    <SelfContained>true</SelfContained>
-    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Framework-dependent: the shared .NET Desktop Runtime and the Windows App Runtime framework
+         package replace the bundled runtimes, keeping the MSIX payload small. -->
+    <SelfContained>false</SelfContained>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" />

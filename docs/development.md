@@ -51,7 +51,7 @@ dotnet build WSnip.slnx -p:Platform=ARM64 -r win-arm64
 [WSnip.slnx](../WSnip.slnx) の明示的なビルド依存と `BuildInParallel=false` は、共有のネイティブバインディング生成が競合するのを避けるためのもの。
 並列化を変更するときは、共有プロジェクトの生成ファイルへの同時書き込みも確認する。
 
-通常のビルドは .NET / Windows App SDK とも self-contained。Native AOT は既定ではなく、WinUI / Win2D / FFmpeg の DLL が隣接する複数ファイルの構成。
+通常のビルドは .NET / Windows App SDK とも framework-dependent。実行にはマシン共通の .NET Desktop Runtime と Windows App Runtime framework package (`Microsoft.WindowsAppRuntime.2`) が必要で、どちらも成果物には同梱しない。Native AOT は既定ではなく、WinUI / Win2D / FFmpeg の DLL が隣接する複数ファイルの構成。
 成果物は通常 `artifacts/bin/FluentWSnip/<構成>_win-<arch>/`、開発登録されたレイアウトはその下の `AppX/` に置かれる。
 正確な出力先は MSBuild / WinApp の実行結果を確認する。`artifacts/` と `.deps/` は Git 管理外。
 
@@ -124,7 +124,7 @@ UI 自動操作には `winapp ui inspect` / `invoke` / `screenshot` などを使
 | --- | --- |
 | 製品・実行ファイル | `FluentWSnip` / `FluentWSnip.exe`。内部のプロジェクト名は `WSnip.*`。 |
 | MSIX identity | `LightStudio.FluentWSnip`。publisher と合わせて package family が決まる。 |
-| インスタンス制御 | `WindowsPlatform.AppId = LightStudio.FluentWSnip`。MSIX と WiX は同じ FluentWSnip 用のインスタンス制御を使う。 |
+| インスタンス制御 | `WindowsPlatform.AppId = LightStudio.FluentWSnip`。MSIX 版と非パッケージの開発実行が同じ FluentWSnip 用のインスタンス制御を使う。 |
 | startup task / Run 値 | `FluentWSnipStartup` / `FluentWSnip`。 |
 | MSIX の設定 | `%LOCALAPPDATA%\Packages\LightStudio.FluentWSnip_<publisher-id>\LocalState\FluentWSnip\settings.json`。 |
 | 非パッケージ版の設定 | `%APPDATA%\FluentWSnip\settings.json`。MSIX 側とは別の保存先。 |
@@ -142,11 +142,8 @@ UI 自動操作には `winapp ui inspect` / `invoke` / `screenshot` などを使
 | [packaging/WSnipMSIX/Package.appxmanifest](../packaging/WSnipMSIX/Package.appxmanifest) | WAP 用の manifest。実行ファイルは `WSnip.App\FluentWSnip.exe`。上記と同じ FluentWSnip identity を使うが、配置が異なる。 |
 | [WSnipMSIX.wapproj](../packaging/WSnipMSIX/WSnipMSIX.wapproj)、[Resources.resw](../packaging/WSnipMSIX/Resources.resw)、[Images/](../packaging/WSnipMSIX/Images) | WAP の構成、パッケージ表示文字列、ロゴ。 |
 | [app.manifest](../src/WSnip.App/app.manifest)、[wsnip.ico](../src/WSnip.App/Assets/wsnip.ico) | Win32 の manifest と実行ファイルのアイコン。 |
-| [Package.wxs](../packaging/WSnipSetup/Package.wxs)、[WSnipPackage.wixproj](../packaging/WSnipSetup/WSnipPackage.wixproj) | MSI のファイル、インストール先、ショートカット、App Paths / プロトコル登録、MSI の upgrade code。 |
-| [Bundle.wxs](../packaging/WSnipSetup/Bundle.wxs)、[WSnipBundle.wixproj](../packaging/WSnipSetup/WSnipBundle.wixproj) | Setup.exe の bootstrapper、ライセンス、MSI chain、bundle 用の別の upgrade code。 |
-| [build.ps1](../packaging/WSnipSetup/build.ps1) | 非パッケージの self-contained publish → MSI → Setup.exe。 |
 | [Set-Version.ps1](../packaging/Set-Version.ps1) | `Directory.Build.props` と二つの MSIX manifest のバージョン更新。 |
-| [release.yml](../.github/workflows/release.yml) | x64 / ARM64 の MSIX / WiX の作成、署名、アーカイブ、GitHub Release。記録済み submodule も取得する。 |
+| [release.yml](../.github/workflows/release.yml) | x64 / ARM64 の MSIX の作成、署名、アーカイブ、GitHub Release。記録済み submodule も取得する。 |
 | [LICENSE](../LICENSE)、[THIRDPARTY.txt](../THIRDPARTY.txt) | 利用条件と同梱依存の表記。 |
 
 単一プロジェクトの未署名 MSIX:
@@ -155,19 +152,10 @@ UI 自動操作には `winapp ui inspect` / `invoke` / `screenshot` などを使
 winapp package src/WSnip.App/WSnip.App.csproj --arch x64 --arch arm64 --no-sign
 ```
 
-WiX の x64 配布ファイル:
-
-```powershell
-./packaging/WSnipSetup/build.ps1 -Architecture x64
-```
-
-WiX の作業出力は `artifacts/fluent-windows-installer/<arch>/`、最終出力は `artifacts/release/FluentWSnipSetup-<arch>.exe`。
-スクリプトは該当アーキテクチャの作業出力を再生成する。ソースを変えても生成済みインストーラーは自動更新されない。
-`WindowsPackageType=None` はこの WiX publish の指定であり、開発実行の既定を非パッケージに変更するものではない。
-
 WAP のビルド・署名は CI のコマンドを基準にする。複数 RID は `RuntimeIdentifiers` 環境変数に `win-x64;win-arm64` を設定している。
+framework-dependent のため、生成される manifest の `Dependencies` には Windows App SDK のビルド機構が `Microsoft.WindowsAppRuntime.2` の framework 依存 (`PackageDependency`) を付与する。実行マシン側には .NET Desktop Runtime が必要。
 署名鍵は Git に入れず、CI は `WINDOWS_SIGNING_CERTIFICATE_BASE64` / `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` を使う。
-MSIX の identity、alias、startup task、バージョンを変える場合は二つの manifest を確認する。WiX の登録名と upgrade code も独立して確認する。
+MSIX の identity、alias、startup task、バージョンを変える場合は二つの manifest を確認する。
 `packaging/flatpak/` に残るアイコンは現行 Windows ビルドには使われない。
 
 ## 問題の切り分け

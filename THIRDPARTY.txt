@@ -53,15 +53,6 @@ FFmpeg
 .NET runtime & libraries
 ------------------------
 .NET Runtime and the .NET base class libraries
+  (used through the target machine's shared .NET Desktop Runtime; not bundled in the package)
   License: MIT
   https://github.com/dotnet/runtime/blob/main/LICENSE.TXT
-
-
-Packaging
----------
-WiX Toolset 5.0.2
-  (build tooling and the WixStandardBootstrapperApplication embedded in Windows
-   setup executables)
-  License: Microsoft Reciprocal License (MS-RL)
-  Source: https://github.com/wixtoolset/wix/tree/v5.0.2
-  https://github.com/wixtoolset/wix/blob/v5.0.2/LICENSE.TXT

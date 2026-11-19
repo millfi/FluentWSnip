@@ -19,13 +19,12 @@ FluentWSnip installs and runs independently of the original WSnip:
 | --- | --- |
 | Executable / execution alias | `FluentWSnip.exe` |
 | MSIX identity / single-instance IPC | `LightStudio.FluentWSnip` |
-| WiX installation / Start menu name | `FluentWSnip` |
 | Unpackaged settings | `%APPDATA%\FluentWSnip\settings.json` |
 | MSIX settings | `LocalState\FluentWSnip` in its own MSIX application data |
 | Default snips | `Screenshots\FluentWSnip` under the Windows Pictures folder |
 | Startup task / Run value | `FluentWSnipStartup` / `FluentWSnip` |
 
-The MSI and setup bundle have their own upgrade codes. Settings are not imported from WSnip,
+Settings are not imported from WSnip,
 and development outputs use `artifacts/bin/FluentWSnip`, preserving the old WSnip development
 package's layout. Internal project paths and namespaces remain `WSnip.*`, so build commands
 are unchanged. Hotkeys must use different combinations in each app; Windows allows one default
@@ -193,7 +192,9 @@ winapp run src/WSnip.App/WSnip.App.csproj --arch x64 -p Platform=x64
 For ARM64, use `-p:Platform=ARM64 -r win-arm64`. `WSnip.App` is now the executable project;
 `WSnip.Desktop` and the Linux projects have been removed.
 
-Normal builds and publishes use self-contained .NET and Windows App SDK runtimes. WinUI and
+Normal builds and publishes are framework-dependent: the shared .NET Desktop Runtime and the
+Windows App Runtime framework package (`Microsoft.WindowsAppRuntime.2`) replace bundled runtimes,
+so the MSIX payload stays small. WinUI and
 Win2D native files ship alongside the executable; this is not a single-file application. The former
 Avalonia static graphics packages and platform initialization have been removed.
 
@@ -214,12 +215,12 @@ signed sideload bundle built by CI. It uses a separate FluentWSnip package ident
 `FluentWSnip.exe` execution alias, screen-clipping protocol, and borderless capture capabilities.
 `packaging/Set-Version.ps1 -Tag v1.2.3` stamps both manifests and the assembly version.
 
-`packaging/WSnipSetup/build.ps1 [-Architecture x64,arm64]` builds the existing WiX installers from
-an unpackaged self-contained WinUI publish, including the Windows App SDK runtime. The MSIX
-configuration remains the default for development and distribution.
-
-The release workflow builds Windows x64/ARM64 MSIX and setup artifacts only. Signing still uses
-`WINDOWS_SIGNING_CERTIFICATE_BASE64` and `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`; the recorded submodule commit selects the shared dependency revision.
+The release workflow builds the Windows x64/ARM64 MSIX bundle only; there is no MSI or setup
+executable. Signing still uses `WINDOWS_SIGNING_CERTIFICATE_BASE64` and
+`WINDOWS_SIGNING_CERTIFICATE_PASSWORD`; the recorded submodule commit selects the shared
+dependency revision. The packages are framework-dependent: installing one requires the .NET 10
+Desktop Runtime and the Windows App Runtime framework package
+(`Microsoft.WindowsAppRuntime.2`) on the target machine.
 
 ## Files
 
@@ -227,7 +228,7 @@ The release workflow builds Windows x64/ARM64 MSIX and setup artifacts only. Sig
   `%LOCALAPPDATA%\Packages\LightStudio.FluentWSnip_<id>\LocalState\FluentWSnip`.
 - Logs: `logs\fluentwsnip.log` beside the settings.
 - Snips: `Pictures\Screenshots\FluentWSnip` (under the redirected Windows Screenshots folder when configured), or the folder selected in settings.
-- Startup: the MSIX startup task or, for the setup installation, the user's Run key.
+- Startup: the MSIX startup task (an unpackaged development run uses the user's Run key).
 
 The settings schema, custom colors, export formats, and eight UI language catalogs are retained.
 FluentWSnip starts with its own settings file, without modifying WSnip's preferences.
