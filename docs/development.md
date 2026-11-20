@@ -152,6 +152,15 @@ UI 自動操作には `winapp ui inspect` / `invoke` / `screenshot` などを使
 winapp package src/WSnip.App/WSnip.App.csproj --arch x64 --arch arm64 --no-sign
 ```
 
+インストールまで含めて動作確認する場合は開発証明書で署名する。
+
+```powershell
+winapp cert generate --manifest src/WSnip.App/Package.appxmanifest --output devcert.pfx
+winapp cert install devcert.pfx   # 最初の一度だけ管理者で実行
+winapp package src/WSnip.App/WSnip.App.csproj --arch x64 --cert devcert.pfx
+Add-AppxPackage .\FluentWSnip-0.1.0.0-x64.msix
+```
+
 WAP のビルド・署名は CI のコマンドを基準にする。複数 RID は `RuntimeIdentifiers` 環境変数に `win-x64;win-arm64` を設定している。
 framework-dependent のため、生成される manifest の `Dependencies` には Windows App SDK のビルド機構が `Microsoft.WindowsAppRuntime.2` の framework 依存 (`PackageDependency`) を付与する。実行マシン側には .NET Desktop Runtime が必要。
 署名鍵は Git に入れず、CI は `WINDOWS_SIGNING_CERTIFICATE_BASE64` / `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` を使う。

@@ -11,3 +11,6 @@ obj/
 AppPackages/
 *.msix
 *.msixbundle
+
+# Development certificate
+devcert.pfx
