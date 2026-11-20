@@ -37,7 +37,7 @@
   <data name="MicaCaption" xml:space="preserve"><value>Windows 11 アプリのように、デスクトップの壁紙の色をウィンドウに反映します。</value></data>
   <data name="Startup" xml:space="preserve"><value>起動</value></data>
   <data name="StartWindows" xml:space="preserve"><value>Windows と同時に起動</value></data>
-  <data name="StartupCaption" xml:space="preserve"><value>通知領域で動作し、いつでもショートカットを使えるようにします。</value></data>
+  <data name="StartupCaption" xml:space="preserve"><value>Windows にサインインすると、通知領域で起動します。</value></data>
   <data name="NewSnip" xml:space="preserve"><value>新しいキャプチャ</value></data>
   <data name="NewSnipTip" xml:space="preserve"><value>新しいキャプチャ (Ctrl+N)</value></data>
   <data name="New" xml:space="preserve"><value>新規</value></data>

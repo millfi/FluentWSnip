@@ -37,7 +37,7 @@
   <data name="MicaCaption" xml:space="preserve"><value>Let the desktop wallpaper tint the window, as Windows 11 apps do.</value></data>
   <data name="Startup" xml:space="preserve"><value>Startup</value></data>
   <data name="StartWindows" xml:space="preserve"><value>Start with Windows</value></data>
-  <data name="StartupCaption" xml:space="preserve"><value>Runs in the notification area so the shortcut always works.</value></data>
+  <data name="StartupCaption" xml:space="preserve"><value>Starts in the notification area when you sign in to Windows.</value></data>
   <data name="NewSnip" xml:space="preserve"><value>New snip</value></data>
   <data name="NewSnipTip" xml:space="preserve"><value>New snip (Ctrl+N)</value></data>
   <data name="New" xml:space="preserve"><value>New</value></data>

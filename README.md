@@ -45,9 +45,12 @@ handler for `ms-screenclip`, and both apps remain available as independent choic
   - On Windows, a global hotkey with a user-assigned combination. It can be changed, set to Print Screen
     or turned off. Each snipping mode can have a hotkey of its own too. FluentWSnip refuses a hotkey
     that another of its hotkeys, another app or Windows already uses.
-  - On Windows, a notification-area icon.
+  - FluentWSnip stays in the notification area after the editor closes, so a configured global
+    hotkey can start a capture without launching the app again. Right-click the icon and choose
+    **Exit** to quit FluentWSnip. Windows may place the icon under **Show hidden icons**.
   - `FluentWSnip.exe --snip [rectangle|window|fullscreen|freeform|wholewindow]`.
-  - On Windows, `--background` starts the app in the tray.
+  - `--background` starts the app in the notification area. Enable **Start with Windows** in
+    settings to do this automatically at sign-in.
   - Later launches forward their command line to the running instance.
 - **Capture:** On Windows, Windows.Graphics.Capture delivers `R16G16B16A16Float` scRGB frames at
   each display's SDR white level and peak brightness. Nothing is clipped to SDR or sRGB. FluentWSnip's

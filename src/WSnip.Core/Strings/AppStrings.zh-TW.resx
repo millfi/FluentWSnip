@@ -37,7 +37,7 @@
   <data name="MicaCaption" xml:space="preserve"><value>讓視窗呈現桌布的色調，如同 Windows 11 應用程式。</value></data>
   <data name="Startup" xml:space="preserve"><value>啟動</value></data>
   <data name="StartWindows" xml:space="preserve"><value>隨 Windows 啟動</value></data>
-  <data name="StartupCaption" xml:space="preserve"><value>在通知區域執行，讓快速鍵隨時可用。</value></data>
+  <data name="StartupCaption" xml:space="preserve"><value>登入 Windows 時在通知區域啟動。</value></data>
   <data name="NewSnip" xml:space="preserve"><value>新增擷取</value></data>
   <data name="NewSnipTip" xml:space="preserve"><value>新增擷取 (Ctrl+N)</value></data>
   <data name="New" xml:space="preserve"><value>新增</value></data>

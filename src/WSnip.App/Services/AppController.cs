@@ -42,7 +42,8 @@ public sealed class AppController : IDisposable
     private SettingsWindow? settingsWindow;
     private NativeTray? tray;
     private Window? backgroundHost;
-
+    private CaptureToolbar? captureToolbar;
+    private CancellationTokenSource? captureCancellation;
 
     private bool capturing;
     private bool exiting;
@@ -58,11 +59,6 @@ public sealed class AppController : IDisposable
         this.store = store;
 
         Settings = store.Load();
-        if (!CanRunInBackground && Settings.LaunchAtStartup)
-        {
-            Settings = Settings.With(settings => settings.LaunchAtStartup = false);
-            store.Save(Settings);
-        }
         Theme = new ThemeService(platform.Windows);
     }
 
@@ -71,11 +67,6 @@ public sealed class AppController : IDisposable
     public ThemeService Theme { get; }
 
     public PlatformServices Platform => platform;
-
-    public bool CanRunInBackground => CanRunInBackgroundWith(Settings);
-
-    private static bool CanRunInBackgroundWith(AppSettings settings) =>
-        (!string.IsNullOrWhiteSpace(settings.Hotkey) || settings.ModeHotkeys.Values.Any(value => !string.IsNullOrWhiteSpace(value)));
 
     /// <summary>Why the capture hotkey could not be registered, if it could not.</summary>
     public string? HotkeyError => HotkeyErrorFor(null);
@@ -99,11 +90,11 @@ public sealed class AppController : IDisposable
         RegisterHotkeys();
         platform.SingleInstance.ArgumentsReceived += (_, forwarded) => dispatcher.TryEnqueue(() => HandleArguments(forwarded, firstLaunch: false));
         platform.SingleInstance.StartListening();
-        Window.WindowClosed += OnWindowClosed;
-        UpdateTray();
+        backgroundHost = new Window { Title = "FluentWSnip background" };
+        backgroundHost.AppWindow.IsShownInSwitchers = false;
+        CreateTray();
         _ = SyncLaunchAtStartupAsync();
         HandleArguments(arguments, firstLaunch: true);
-        ExitIfIdle();
     }
 
     /// <summary>
@@ -112,6 +103,9 @@ public sealed class AppController : IDisposable
     /// </summary>
     public void HandleArguments(IReadOnlyList<string> arguments, bool firstLaunch)
     {
+        if (exiting)
+            return;
+
         if (OperatingSystem.IsWindows() && arguments.Any(argument =>
             Uri.TryCreate(argument, UriKind.Absolute, out Uri? uri) &&
             uri.Scheme.Equals("ms-screenclip", StringComparison.OrdinalIgnoreCase)))
@@ -144,18 +138,22 @@ public sealed class AppController : IDisposable
         List<(Window Window, Window? Owner)>? hidden = null;
         CaptureToolbar? toolbar = null;
         using var selectionCancellation = new CancellationTokenSource();
+        captureCancellation = selectionCancellation;
         try
         {
             SnipMode initialMode = mode ?? Settings.Mode;
             int delay = delaySeconds ?? 0;
             hidden = HideWindows();
             if (delay > 0)
-                await Task.Delay(TimeSpan.FromSeconds(delay));
+                await Task.Delay(TimeSpan.FromSeconds(delay), selectionCancellation.Token);
             else if (hidden.Count > 0)
-                await Task.Delay(HiddenWindowsSettle);
+                await Task.Delay(HiddenWindowsSettle, selectionCancellation.Token);
+
+            if (exiting)
+                return;
 
             platform.Windows.TryGetCursorPosition(out int pointerX, out int pointerY);
-            toolbar = new CaptureToolbar(new PixelPoint(pointerX, pointerY), initialMode, Theme);
+            toolbar = captureToolbar = new CaptureToolbar(new PixelPoint(pointerX, pointerY), initialMode, Theme);
             toolbar.ModeChanged += selected => UpdateSettings(Settings.With(s => s.Mode = selected));
             toolbar.CancelRequested += selectionCancellation.Cancel;
             if (!await toolbar.ShowAsync()) return;
@@ -165,7 +163,7 @@ public sealed class AppController : IDisposable
                 if (toolbar.Mode == SnipMode.WholeWindow)
                 {
                     SnipMode? nextMode = await SnipWholeWindowAsync(toolbar,
-                        restoreEditor: hidden.Any(entry => ReferenceEquals(entry.Window, editor)));
+                        restoreEditor: hidden.Any(entry => ReferenceEquals(entry.Window, editor)), selectionCancellation.Token);
                     if (nextMode is null)
                         return;
                     continue;
@@ -193,6 +191,8 @@ public sealed class AppController : IDisposable
                 editor?.Clear();
                 using Snip snip = await Task.Run(() => SnipComposer.Compose(snapshot, selection.Region, selection.Outline));
                 snapshot.Dispose();
+                if (exiting)
+                    return;
                 AppLog.Information("Snip", $"{selection.Mode} snip {snip.Width}x{snip.Height}: {snip.Statistics}");
                 await DeliverAsync(snip, restoreEditor: hidden?.Any(entry => ReferenceEquals(entry.Window, editor)) == true);
                 return;
@@ -200,24 +200,24 @@ public sealed class AppController : IDisposable
         }
         catch (OperationCanceledException exception)
         {
-            // The user declined the system's screen sharing prompt.
             AppLog.Information("Snip", $"The snip was cancelled: {exception.Message}");
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             AppLog.Error("Snip", "Taking a snip failed.", exception);
             toolbar?.CloseSafely();
-            MessageDialog.Show(editor is { IsVisible: true } ? editor : null, "FluentWSnip", string.Format(AppStrings.CaptureFailed, exception.Message));
+            if (!exiting)
+                MessageDialog.Show(editor is { IsVisible: true } ? editor : null, "FluentWSnip", string.Format(AppStrings.CaptureFailed, exception.Message));
         }
         finally
         {
             toolbar?.CloseSafely();
             if (hidden is not null)
                 RestoreWindows(hidden);
+            captureToolbar = null;
+            captureCancellation = null;
             capturing = false;
-            if (exiting)
-                (platform.Capture as IDisposable)?.Dispose();
-            ExitIfIdle();
+            FinishExitWhenIdle();
         }
     }
 
@@ -252,10 +252,6 @@ public sealed class AppController : IDisposable
 
     public void UpdateSettings(AppSettings updated)
     {
-        bool wasBackgroundEnabled = CanRunInBackground;
-        bool backgroundEnabled = CanRunInBackgroundWith(updated);
-        if (!backgroundEnabled || !wasBackgroundEnabled)
-            updated = updated.With(settings => settings.LaunchAtStartup = backgroundEnabled);
         bool themeChanged = updated.Theme != Settings.Theme || updated.UseMica != Settings.UseMica;
         bool hotkeysChanged = updated.Hotkey != Settings.Hotkey || !ReferenceEquals(updated.ModeHotkeys, Settings.ModeHotkeys);
         bool startupChanged = updated.LaunchAtStartup != Settings.LaunchAtStartup;
@@ -265,12 +261,9 @@ public sealed class AppController : IDisposable
             Theme.Configure(updated.Theme, updated.UseMica);
         if (hotkeysChanged)
             RegisterHotkeys();
-        if (wasBackgroundEnabled != backgroundEnabled)
-            UpdateTray();
-        if (startupChanged || wasBackgroundEnabled != backgroundEnabled)
+        if (startupChanged)
             _ = SyncLaunchAtStartupAsync();
         editor?.OnSettingsChanged();
-        dispatcher.TryEnqueue(ExitIfIdle);
     }
 
     /// <summary>
@@ -367,6 +360,15 @@ public sealed class AppController : IDisposable
         if (exiting)
             return;
         exiting = true;
+        captureCancellation?.Cancel();
+        captureToolbar?.CloseSafely();
+        FinishExitWhenIdle();
+    }
+
+    private void FinishExitWhenIdle()
+    {
+        if (!exiting || disposed || capturing || editorOperations != 0 || startupOperations != 0)
+            return;
         AppLog.Information("Lifetime", "Exiting FluentWSnip.");
         Dispose();
         foreach (var window in Window.Windows.ToArray()) window.CloseSafely();
@@ -380,7 +382,6 @@ public sealed class AppController : IDisposable
         disposed = true;
         editor?.Clear();
         settingsWindow?.Close();
-        Window.WindowClosed -= OnWindowClosed;
         backgroundHost?.CloseSafely();
         backgroundHost = null;
         tray?.Dispose();
@@ -389,13 +390,12 @@ public sealed class AppController : IDisposable
         platform.Hotkeys.Dispose();
         platform.SingleInstance.Dispose();
         Theme.Dispose();
-        // Do not tear down a D3D/PipeWire device or its semaphore while a capture owns it.
-        // The capture's finally releases it if shutdown interrupts an operation.
+        // An active capture owns the device until its asynchronous cleanup completes.
         if (!capturing)
             (platform.Capture as IDisposable)?.Dispose();
     }
 
-    /// <summary>Keeps the app alive until an accepted copy/save finishes, even after its window closes.</summary>
+    /// <summary>Lets an accepted copy or save finish before shutdown.</summary>
     internal IDisposable BeginEditorOperation()
     {
         editorOperations++;
@@ -411,15 +411,8 @@ public sealed class AppController : IDisposable
             if (Interlocked.Exchange(ref owner, null) is not { } current)
                 return;
             current.editorOperations--;
-            current.ExitIfIdle();
+            current.FinishExitWhenIdle();
         }
-    }
-
-    private void ExitIfIdle()
-    {
-        if (!CanRunInBackground && !exiting && !capturing && editorOperations == 0 && startupOperations == 0 &&
-            !Window.Windows.Any(window => window.IsVisible))
-            Exit();
     }
 
     /// <summary>
@@ -430,7 +423,7 @@ public sealed class AppController : IDisposable
     /// The editor and settings windows stay hidden; the shared capture toolbar remains available.
     /// The capture flow restores the hidden windows afterward.
     /// </remarks>
-    private async Task<SnipMode?> SnipWholeWindowAsync(CaptureToolbar toolbar, bool restoreEditor)
+    private async Task<SnipMode?> SnipWholeWindowAsync(CaptureToolbar toolbar, bool restoreEditor, CancellationToken cancellationToken)
     {
         if (!platform.WindowPicker.IsSupported)
             throw new NotSupportedException(AppStrings.WindowPickingUnsupported);
@@ -460,16 +453,17 @@ public sealed class AppController : IDisposable
             toolbar.CancelRequested -= cancellation.Cancel;
         }
 
-        if (toolbar.IsCancelled) return null;
+        if (toolbar.IsCancelled || exiting) return null;
         if (modeChanged || toolbar.Mode != SnipMode.WholeWindow) return toolbar.Mode;
         if (window is null) return null;
         toolbar.Hide();
-        using WindowCapture capture = await platform.Capture.CaptureWindowAsync(window, new CaptureOptions { IncludeCursor = Settings.IncludeCursor });
-        // The portal asks for the window during CaptureWindowAsync, not PickAsync. Only retire
-        // the old snip after capture succeeds so declining that prompt never loses edits.
+        using WindowCapture capture = await platform.Capture.CaptureWindowAsync(
+            window, new CaptureOptions { IncludeCursor = Settings.IncludeCursor }, cancellationToken);
         editor?.Clear();
         using Snip snip = await Task.Run(() => SnipComposer.FromWindow(capture));
         capture.Dispose();
+        if (exiting)
+            return null;
         AppLog.Information("Snip", $"Whole window snip of '{window.Title}' {snip.Width}x{snip.Height}: {snip.Statistics}");
         await DeliverAsync(snip, restoreEditor);
         return null;
@@ -646,7 +640,7 @@ public sealed class AppController : IDisposable
         try
         {
             bool enabled = await platform.Shell.IsLaunchAtStartupEnabledAsync();
-            bool wanted = CanRunInBackground && Settings.LaunchAtStartup;
+            bool wanted = Settings.LaunchAtStartup;
             if (Environment.ProcessPath is not { } executable || enabled == wanted)
                 return;
             await platform.Shell.SetLaunchAtStartupAsync(wanted, executable, "--background");
@@ -659,32 +653,9 @@ public sealed class AppController : IDisposable
         {
             startupSync.Release();
             startupOperations--;
-            dispatcher.TryEnqueue(ExitIfIdle);
+            dispatcher.TryEnqueue(FinishExitWhenIdle);
         }
     }
-
-    private void UpdateTray()
-    {
-        if (CanRunInBackground)
-        {
-            if (tray is null)
-            {
-                backgroundHost = new Window { Title = "FluentWSnip background" };
-                backgroundHost.AppWindow.IsShownInSwitchers = false;
-                CreateTray();
-            }
-        }
-        else if (tray is not null)
-        {
-
-            tray.Dispose();
-            tray = null;
-            backgroundHost?.CloseSafely();
-            backgroundHost = null;
-        }
-    }
-
-    private void OnWindowClosed() => dispatcher.TryEnqueue(ExitIfIdle);
 
     private void CreateTray() => tray = new NativeTray(
     [
@@ -693,7 +664,7 @@ public sealed class AppController : IDisposable
         (AppStrings.OpenFolder, () => platform.Shell.OpenFolder(SaveFolder)),
         (AppStrings.Settings, ShowSettings),
         (string.Empty, null),
-        (AppStrings.Exit, Exit),
+        (AppStrings.Exit, () => dispatcher.TryEnqueue(Exit)),
     ], () => ShowEditor());
     private static string UniquePath(string path)
     {

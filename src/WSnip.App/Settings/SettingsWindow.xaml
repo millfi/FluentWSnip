@@ -3,8 +3,8 @@
         <StackPanel Margin="24,12,24,24">
             <TextBlock Text="{x:Bind strings:AppStrings.Settings, Mode=OneTime}" FontSize="24" FontWeight="SemiBold" Margin="0,4,0,4" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
 
-            <TextBlock x:Name="StartupSectionTitle" Style="{StaticResource SectionTitleStyle}" Text="{x:Bind strings:AppStrings.Startup, Mode=OneTime}" Visibility="Collapsed" />
-            <Border x:Name="StartupRow" Style="{StaticResource SettingRowStyle}" Visibility="Collapsed">
+            <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{x:Bind strings:AppStrings.Startup, Mode=OneTime}" />
+            <Border Style="{StaticResource SettingRowStyle}">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="{x:Bind strings:AppStrings.StartWindows, Mode=OneTime}" />

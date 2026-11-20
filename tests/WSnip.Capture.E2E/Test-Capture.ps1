@@ -10,7 +10,9 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $layoutRoot = Join-Path $repo 'artifacts/capture-e2e'
-$output = [IO.Directory]::CreateDirectory((Join-Path $layoutRoot ("run-" + [guid]::NewGuid().ToString('N')))).FullName
+$runId = [guid]::NewGuid().ToString('N')
+$output = [IO.Directory]::CreateDirectory((Join-Path $layoutRoot "run-$runId")).FullName
+$stagingPath = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) "FluentWSnip.CaptureE2E-$runId"))
 $screenshots = [IO.Directory]::CreateDirectory((Join-Path $output 'saved')).FullName
 $reports = [Collections.Generic.List[object]]::new()
 $workflow = $env:WINAPP_UI_WORKFLOW_ID
@@ -100,8 +102,56 @@ function Wait-ForToolbarFocus([string]$Window) {
     } 40
 }
 
-function Complete-Capture {
-    if (!$script:app.WaitForExit(15000)) { throw 'FluentWSnip did not exit after the capture.' }
+function Find-TrayIcon($Windows) {
+    foreach ($window in $Windows) {
+        $inspection = Invoke-WinApp @('ui', 'inspect', '-w', "$($window.hwnd)", '--interactive')
+        $icon = $inspection.windows.elements |
+            Where-Object { $_.name -like 'FluentWSnip*' -and $_.automationId -eq 'NotifyItemIcon' -and !$_.isOffscreen } |
+            Select-Object -First 1
+        if ($icon) {
+            return [pscustomobject]@{ Window = "$($window.hwnd)"; Selector = $icon.selector }
+        }
+    }
+}
+
+function Exit-FromTray {
+    $taskbar = Invoke-WinApp @('ui', 'list-windows') |
+        Where-Object className -eq 'Shell_TrayWnd' | Select-Object -First 1
+    if (!$taskbar) { throw 'Windows did not expose the taskbar.' }
+    $icon = Find-TrayIcon @($taskbar)
+    if (!$icon) {
+        # Win+B focuses the overflow button when Windows hides notification-area icons.
+        Invoke-WinApp @('ui', 'send-keys', 'win+b enter', '-w', "$($taskbar.hwnd)", '--via', 'send-input', '--allow-system-keys') | Out-Null
+        $icon = Wait-For 'the FluentWSnip icon in the notification area' {
+            $overflow = Invoke-WinApp @('ui', 'list-windows') |
+                Where-Object { $_.className -in 'TopLevelWindowForOverflowXamlIsland', 'NotifyIconOverflowWindow' }
+            Find-TrayIcon @($overflow)
+        }
+    }
+    Invoke-WinApp @('ui', 'click', $icon.Selector, '-w', $icon.Window, '--right') | Out-Null
+
+    $menu = Wait-For 'the FluentWSnip tray menu' {
+        Get-CaptureWindows | Where-Object className -eq '#32768' | Select-Object -First 1
+    }
+    $exitLabels = Get-ChildItem -LiteralPath (Join-Path $repo 'src/WSnip.Core/Strings') -Filter '*.resx' |
+        ForEach-Object { ([xml](Get-Content -LiteralPath $_.FullName -Raw)).root.data.Where({ $_.name -eq 'Exit' }).value }
+    $inspection = Invoke-WinApp @('ui', 'inspect', '-w', "$($menu.hwnd)", '--interactive')
+    $exitItem = $inspection.windows.elements |
+        Where-Object { $_.type -eq 'MenuItem' -and $_.name -in $exitLabels } | Select-Object -First 1
+    if (!$exitItem) { throw 'The notification-area menu did not offer Exit.' }
+    $exitTimeout = 15000
+    try {
+        Invoke-WinApp @('ui', 'click', $exitItem.selector, '-w', "$($menu.hwnd)") | Out-Null
+    }
+    catch {
+        if ($_.Exception.Message -notmatch '"code"\s*:\s*"(no_interactive_desktop|foreground_not_target)"') { throw }
+        # The native popup may have a hidden foreground owner. Let the user select the menu item
+        # when WinApp's input guard rejects the click.
+        Write-Host "WinApp could not click '$($exitItem.name)'. Select it directly from the FluentWSnip notification-area menu."
+        $exitTimeout = 60000
+    }
+
+    if (!$script:app.WaitForExit($exitTimeout)) { throw 'FluentWSnip did not exit from the notification-area menu.' }
     if ($script:app.ExitCode -ne 0) { throw "FluentWSnip exited with code $($script:app.ExitCode)." }
 }
 
@@ -212,8 +262,10 @@ try {
 
     $rid = "win-$($Architecture.ToLowerInvariant())"
     $build = Join-Path $repo "artifacts/bin/FluentWSnip/$($Configuration.ToLowerInvariant())_$rid"
-    $deployment = [IO.Directory]::CreateDirectory((Join-Path $output 'AppX')).FullName
     [xml]$manifest = Get-Content -LiteralPath (Join-Path $build 'AppxManifest.xml') -Raw
+    # A workspace can have a low integrity label, which prevents the test app from
+    # capturing the desktop or talking to Explorer's notification area.
+    $deployment = [IO.Directory]::CreateDirectory($stagingPath).FullName
     $manifest.Package.Identity.SetAttribute('Name', $packageName)
     $manifest.Package.Properties.DisplayName = $packageTitle
     $application = $manifest.Package.Applications.Application
@@ -244,7 +296,7 @@ try {
 
     $fixturePath = Join-Path $PSScriptRoot 'Show-Fixture.ps1'
     $fixtureArguments = '-NoProfile -STA -File "{0}" -Directory "{1}" -ParentId {2}' -f $fixturePath, $output, $PID
-    $fixture = Start-Process -FilePath powershell.exe -WindowStyle Hidden -PassThru -ArgumentList $fixtureArguments -RedirectStandardError (Join-Path $output 'fixture-errors.txt')
+    $fixture = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -WindowStyle Hidden -PassThru -ArgumentList $fixtureArguments -RedirectStandardError (Join-Path $output 'fixture-errors.txt')
     $geometry = Wait-For 'the two fixture windows' {
         if ($fixture.HasExited) { throw "Fixture exited. See fixture-errors.txt in $output." }
         $ready = Join-Path $output 'fixture.json'
@@ -291,9 +343,16 @@ try {
     }
     $reports.Add(@{ case = $stage; status = 'PASS' })
     Write-Host "PASS $stage"
-    $stage = 'Shutdown'
+    $stage = 'Tray'
     $null = $script:app.CloseMainWindow()
-    Complete-Capture
+    $null = Wait-For 'the editor to close while the process stays resident' {
+        $script:app.Refresh()
+        if ($script:app.HasExited) { throw 'Closing the editor stopped the resident process.' }
+        $script:app.MainWindowHandle -eq [IntPtr]::Zero
+    }
+    Exit-FromTray
+    $reports.Add(@{ case = $stage; status = 'PASS' })
+    Write-Host "PASS $stage"
 }
 catch {
     $reports.Add(@{ case = $stage; status = 'FAIL'; detail = $_.ToString() })
@@ -303,14 +362,21 @@ finally {
     try {
         if ($script:app -and !$script:app.HasExited) {
             try {
-                $toolbar = Get-CaptureWindows | Where-Object { $_.className -eq 'WinUIDesktopWin32WindowClass' -and $_.height -lt 240 } |
-                    Select-Object -First 1
+                $windows = @(Get-CaptureWindows)
+                $toolbar = $windows | Where-Object {
+                    $_.className -eq 'WinUIDesktopWin32WindowClass' -and $_.height -lt 240
+                } | Select-Object -First 1
                 if ($toolbar) {
                     Invoke-WinApp @('ui', 'invoke', 'CancelSnip', '-w', "$($toolbar.hwnd)") | Out-Null
-                } else {
-                    $null = $script:app.CloseMainWindow()
+                    $null = Wait-For 'the capture windows to close' {
+                        !(Get-CaptureWindows | Where-Object {
+                            $_.hwnd -eq $toolbar.hwnd -or $_.className -eq 'FluentWSnip.PickerBorder'
+                        })
+                    } 3
                 }
             } catch { Write-Warning $_ }
+            # Only the isolated process returned by Start-Capture is stored in $script:app.
+            if (!$script:app.HasExited) { Stop-Process -InputObject $script:app }
             if (!$script:app.WaitForExit(3000)) {
                 Write-Warning "Test process $($script:app.Id) is still running. Close it before the next run."
             }
@@ -319,13 +385,15 @@ finally {
             [IO.File]::WriteAllText((Join-Path $output 'close-fixture'), '')
             $null = $fixture.WaitForExit(3000)
         }
-        if ($package -and $package.InstallLocation -eq $deployment -and (!$script:app -or $script:app.HasExited)) {
-            if ($appLog -and (Test-Path -LiteralPath $appLog)) { Copy-Item -LiteralPath $appLog -Destination $output }
-            Remove-AppxPackage -Package $package.PackageFullName
-            $stagedPath = (Resolve-Path -LiteralPath $deployment).Path
-            $runPath = (Resolve-Path -LiteralPath $output).Path
-            if ($stagedPath -eq (Join-Path $runPath 'AppX')) {
-                Remove-Item -LiteralPath $stagedPath -Recurse -Force
+        if ($deployment -and (!$script:app -or $script:app.HasExited)) {
+            if ($package -and $package.InstallLocation -eq $deployment) {
+                if ($appLog -and (Test-Path -LiteralPath $appLog)) { Copy-Item -LiteralPath $appLog -Destination $output }
+                Remove-AppxPackage -Package $package.PackageFullName
+            }
+            $resolvedStagingPath = (Resolve-Path -LiteralPath $deployment).Path
+            if ($resolvedStagingPath -eq $stagingPath -and
+                !(Get-Item -LiteralPath $resolvedStagingPath).LinkType) {
+                Remove-Item -LiteralPath $resolvedStagingPath -Recurse -Force
             }
         }
         Invoke-WinApp @('ui', 'yield') | Out-Null

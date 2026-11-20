@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
+using LightStudio.Logging;
 
 namespace WSnip.App.Services;
 
-/// <summary>A native notification icon; the hidden owner keeps WinUI running without an editor.</summary>
+/// <summary>Owns the notification icon and the native window that receives its callbacks.</summary>
 internal sealed class NativeTray : IDisposable
 {
     private const uint Callback = 0x8001;
@@ -21,8 +22,17 @@ internal sealed class NativeTray : IDisposable
         hwnd = CreateWindowEx(0, "STATIC", "FluentWSnip notification area", unchecked((int)0x80000000), 0, 0, 0, 0, 0, 0, 0, 0);
         if (hwnd == 0) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         callback = WndProc;
-        if (!SetWindowSubclass(hwnd, callback, 1, 0)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        if (!SetWindowSubclass(hwnd, callback, 1, 0))
+        {
+            DestroyWindow(hwnd);
+            throw new InvalidOperationException("Could not subclass the notification area window.");
+        }
         icon = LoadImage(0, Path.Combine(AppContext.BaseDirectory, "Assets", "wsnip.ico"), 1, 0, 0, 0x10 | 0x40);
+        if (icon == 0)
+        {
+            Dispose();
+            throw new InvalidOperationException("Could not load the notification area icon.");
+        }
         taskbarCreated = RegisterWindowMessage("TaskbarCreated");
         Add();
     }
@@ -32,7 +42,12 @@ internal sealed class NativeTray : IDisposable
         Flags = 0x1 | 0x2 | 0x4, CallbackMessage = Callback, Icon = icon, Tip = "FluentWSnip",
         Info = "", InfoTitle = "",
     };
-    private void Add() { var data = Data(); ShellNotifyIcon(0, ref data); }
+    private void Add()
+    {
+        var data = Data();
+        if (!ShellNotifyIcon(0, ref data))
+            AppLog.Warning("Tray", "Could not register the FluentWSnip icon in the notification area.");
+    }
     private nint WndProc(nint window, uint message, nuint wparam, nint lparam, nuint id, nuint data)
     {
         if (message == taskbarCreated) Add();
@@ -43,17 +58,21 @@ internal sealed class NativeTray : IDisposable
             else if (notification == 0x0205 || notification == 0x007B)
             {
                 nint menu = CreatePopupMenu();
+                if (menu == 0)
+                    return 0;
+                uint selected;
                 try
                 {
                     for (int i = 0; i < commands.Length; i++)
                         AppendMenu(menu, commands[i].Action is null ? 0x800u : 0u, (nuint)(i + 1), commands[i].Text);
                     GetCursorPos(out var point);
                     SetForegroundWindow(hwnd);
-                    uint selected = TrackPopupMenu(menu, 0x100 | 0x2, point.X, point.Y, 0, hwnd, 0);
+                    selected = TrackPopupMenu(menu, 0x100 | 0x2, point.X, point.Y, 0, hwnd, 0);
                     PostMessage(hwnd, 0, 0, 0);
-                    if (selected > 0 && selected <= commands.Length) commands[selected - 1].Action?.Invoke();
                 }
                 finally { DestroyMenu(menu); }
+                if (selected > 0 && selected <= commands.Length)
+                    commands[selected - 1].Action?.Invoke();
             }
             return 0;
         }

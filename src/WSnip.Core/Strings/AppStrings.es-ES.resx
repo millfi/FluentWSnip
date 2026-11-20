@@ -37,7 +37,7 @@
   <data name="MicaCaption" xml:space="preserve"><value>Teñir la ventana con el fondo de escritorio, como las aplicaciones de Windows 11.</value></data>
   <data name="Startup" xml:space="preserve"><value>Inicio</value></data>
   <data name="StartWindows" xml:space="preserve"><value>Iniciar con Windows</value></data>
-  <data name="StartupCaption" xml:space="preserve"><value>Se ejecuta en el área de notificación para que el atajo funcione siempre.</value></data>
+  <data name="StartupCaption" xml:space="preserve"><value>Se inicia en el área de notificación al iniciar sesión en Windows.</value></data>
   <data name="NewSnip" xml:space="preserve"><value>Nueva captura</value></data>
   <data name="NewSnipTip" xml:space="preserve"><value>Nueva captura (Ctrl+N)</value></data>
   <data name="New" xml:space="preserve"><value>Nuevo</value></data>

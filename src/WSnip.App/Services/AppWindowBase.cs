@@ -11,7 +11,6 @@ public enum WindowState { Normal, Minimized, Maximized }
 public class AppWindowBase : Window
 {
     public static List<AppWindowBase> Windows { get; } = [];
-    public static event Action? WindowClosed;
     public nint Handle { get; }
     public bool IsVisible => AppWindow.IsVisible;
     public bool IsActive { get; private set; }
@@ -40,7 +39,6 @@ public class AppWindowBase : Window
             IsClosed = true;
             Windows.Remove(this);
             LightStudio.Logging.AppLog.Information("Lifetime", $"Closed '{Title}'; {Windows.Count} WinUI windows remain.");
-            WindowClosed?.Invoke();
         };
     }
 

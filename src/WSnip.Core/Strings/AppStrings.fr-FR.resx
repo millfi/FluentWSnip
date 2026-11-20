@@ -37,7 +37,7 @@
   <data name="MicaCaption" xml:space="preserve"><value>Teinter la fenêtre avec le fond d'écran, comme les applications Windows 11.</value></data>
   <data name="Startup" xml:space="preserve"><value>Démarrage</value></data>
   <data name="StartWindows" xml:space="preserve"><value>Démarrer avec Windows</value></data>
-  <data name="StartupCaption" xml:space="preserve"><value>S'exécute dans la zone de notification pour que le raccourci fonctionne toujours.</value></data>
+  <data name="StartupCaption" xml:space="preserve"><value>Démarre dans la zone de notification à l’ouverture de votre session Windows.</value></data>
   <data name="NewSnip" xml:space="preserve"><value>Nouvelle capture</value></data>
   <data name="NewSnipTip" xml:space="preserve"><value>Nouvelle capture (Ctrl+N)</value></data>
   <data name="New" xml:space="preserve"><value>Nouveau</value></data>

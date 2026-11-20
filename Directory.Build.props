@@ -9,7 +9,7 @@
     <Platforms>x64;ARM64</Platforms>
     <Configurations>Debug;Release</Configurations>
     <BuildInParallel>false</BuildInParallel>
-    <Version>0.1.0.0</Version>
+    <Version>0.1.1.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
     <Company>Light Studio</Company>

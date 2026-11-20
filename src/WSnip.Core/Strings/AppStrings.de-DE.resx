@@ -37,7 +37,7 @@
   <data name="MicaCaption" xml:space="preserve"><value>Das Hintergrundbild färbt das Fenster wie bei Windows-11-Apps.</value></data>
   <data name="Startup" xml:space="preserve"><value>Autostart</value></data>
   <data name="StartWindows" xml:space="preserve"><value>Mit Windows starten</value></data>
-  <data name="StartupCaption" xml:space="preserve"><value>Läuft im Infobereich, damit die Tastenkombination immer funktioniert.</value></data>
+  <data name="StartupCaption" xml:space="preserve"><value>Startet bei der Windows-Anmeldung im Infobereich.</value></data>
   <data name="NewSnip" xml:space="preserve"><value>Neue Aufnahme</value></data>
   <data name="NewSnipTip" xml:space="preserve"><value>Neue Aufnahme (Strg+N)</value></data>
   <data name="New" xml:space="preserve"><value>Neu</value></data>

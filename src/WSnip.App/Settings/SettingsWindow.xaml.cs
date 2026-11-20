@@ -146,8 +146,6 @@ public partial class SettingsWindow : AppWindowBase
         ToneCurveBox.IsEnabled = settings.ToneMapping != SdrToneMapping.Clip;
         Select(ThemeBox, settings.Theme);
         MicaSwitch.IsOn = settings.UseMica;
-        StartupSectionTitle.Visibility = (controller.CanRunInBackground) ? Visibility.Visible : Visibility.Collapsed;
-        StartupRow.Visibility = (controller.CanRunInBackground) ? Visibility.Visible : Visibility.Collapsed;
         StartupSwitch.IsOn = settings.LaunchAtStartup;
 
         string version = typeof(SettingsWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "";
